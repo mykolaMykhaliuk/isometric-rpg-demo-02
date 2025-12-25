@@ -41,6 +41,9 @@ export class Ammo extends Phaser.Physics.Arcade.Sprite {
     this.floatOffset += this.floatSpeed;
     const floatAmount = Math.sin(this.floatOffset) * 2;
     this.y = this.baseY + floatAmount;
+    
+    // Subtle rotation animation
+    this.angle = Math.sin(this.floatOffset * 0.5) * 5;
 
     // Check for player pickup
     if (this.player) {
@@ -70,13 +73,32 @@ export class Ammo extends Phaser.Physics.Arcade.Sprite {
     // Add ammo to player
     this.player.addAmmo(this.ammoAmount);
 
-    // Visual feedback
+    // Pickup particle effect
+    const pickupEffect = this.scene.add.particles(
+      this.x,
+      this.y,
+      'bullet',
+      {
+        speed: { min: 20, max: 60 },
+        scale: { start: 0.4, end: 0 },
+        lifespan: 200,
+        quantity: 6,
+        tint: [0xffd700, 0xffaa00, 0xffff00],
+        emitZone: { type: 'edge', source: new Phaser.Geom.Circle(0, 0, 6), quantity: 6 },
+      }
+    );
+    pickupEffect.setDepth(this.y + 6);
+    this.scene.time.delayedCall(200, () => pickupEffect.destroy());
+
+    // Visual feedback with rotation
     this.scene.tweens.add({
       targets: this,
       alpha: 0,
-      scale: 0.3,
-      y: this.y - 20,
-      duration: 200,
+      scale: 0.2,
+      y: this.y - 30,
+      angle: 360,
+      duration: 300,
+      ease: 'Power2',
       onComplete: () => {
         this.setActive(false);
         this.setVisible(false);

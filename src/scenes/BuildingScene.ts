@@ -126,16 +126,44 @@ export class BuildingScene extends Phaser.Scene {
             // Exit door
             this.exitPosition = { x: screenX, y: screenY };
 
-            const exitIndicator = this.add.circle(screenX, screenY, 10, 0x00ff00, 0.7);
+            const exitIndicator = this.add.circle(screenX, screenY, 12, 0x00ff00, 0.8);
             exitIndicator.setDepth(y + 50);
+            
+            // Outer glow
+            const exitGlow = this.add.circle(screenX, screenY, 14, 0x00ff00, 0.4);
+            exitGlow.setDepth(y + 49);
+            
+            // Pulsing animation
+            this.tweens.add({
+              targets: [exitIndicator, exitGlow],
+              scale: { from: 1, to: 1.2 },
+              alpha: { from: 0.8, to: 0.3 },
+              duration: 1000,
+              yoyo: true,
+              repeat: -1,
+              ease: 'Sine.easeInOut',
+            });
 
-            const exitHint = this.add.text(screenX, screenY - 25, 'E - Exit', {
-              fontSize: '12px',
+            const exitHint = this.add.text(screenX, screenY - 30, 'E - Exit', {
+              fontSize: '14px',
+              fontStyle: 'bold',
               color: '#ffffff',
               backgroundColor: '#000000',
-              padding: { x: 4, y: 2 },
+              padding: { x: 6, y: 4 },
+              stroke: '#00ff00',
+              strokeThickness: 2,
             }).setOrigin(0.5);
             exitHint.setDepth(y + 51);
+            
+            // Hint glow
+            this.tweens.add({
+              targets: exitHint,
+              scale: { from: 1, to: 1.1 },
+              duration: 800,
+              yoyo: true,
+              repeat: -1,
+              ease: 'Sine.easeInOut',
+            });
           }
         } else if (tileType === 1) {
           // Wall tile
@@ -241,6 +269,22 @@ export class BuildingScene extends Phaser.Scene {
     if (bulletSprite.body) {
       bulletSprite.body.enable = false;
     }
+
+    // Hit particle effect
+    const hitEffect = this.add.particles(
+      bulletSprite.x,
+      bulletSprite.y,
+      'bullet',
+      {
+        speed: { min: 30, max: 80 },
+        scale: { start: 0.3, end: 0 },
+        lifespan: 150,
+        quantity: 4,
+        tint: [0xffff00, 0xffaa00, 0xff6600],
+      }
+    );
+    hitEffect.setDepth(bulletSprite.y + 10);
+    this.time.delayedCall(150, () => hitEffect.destroy());
 
     enemyEntity.takeDamage(20);
   }

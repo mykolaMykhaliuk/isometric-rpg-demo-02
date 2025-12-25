@@ -14,7 +14,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   public lastDirection: Phaser.Math.Vector2 = new Phaser.Math.Vector2(1, 0);
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, 'player');
+    super(scene, x, y, 'player_right');
 
     scene.add.existing(this);
     scene.physics.add.existing(this);
@@ -22,6 +22,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.setCollideWorldBounds(true);
     this.setDepth(10);
     this.setScale(1.2);
+    
+    // Ensure we start with the right texture
+    this.setTexture('player_right');
 
     if (this.body) {
       (this.body as Phaser.Physics.Arcade.Body).setSize(20, 20);
@@ -69,6 +72,61 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     if (velocity.length() > 0) {
       this.lastDirection = velocity.clone().normalize();
+      this.updateDirection(velocity);
+    } else {
+      // When stopped, maintain the last direction visually
+      // (don't change texture, keep facing the last movement direction)
+    }
+  }
+
+  private updateDirection(velocity: Phaser.Math.Vector2): void {
+    // Check if velocity has length to avoid division by zero
+    if (velocity.length() === 0) {
+      return;
+    }
+    
+    // Normalize velocity to get direction
+    const normalized = velocity.clone().normalize();
+    const angle = Phaser.Math.RadToDeg(Math.atan2(normalized.y, normalized.x));
+    
+    // Determine direction based on angle
+    // Right: -45 to 45 degrees
+    // Down-Right: 45 to 90 degrees
+    // Down: 90 to 135 degrees
+    // Down-Left: 135 to 180 degrees
+    // Left: -180 to -135 or 135 to 180 degrees
+    // Up-Left: -135 to -90 degrees
+    // Up: -90 to -45 degrees
+    // Up-Right: -45 to 0 degrees
+    
+    let textureKey = 'player_right'; // default
+    
+    if (angle >= -22.5 && angle < 22.5) {
+      textureKey = 'player_right';
+    } else if (angle >= 22.5 && angle < 67.5) {
+      textureKey = 'player_downRight';
+    } else if (angle >= 67.5 && angle < 112.5) {
+      textureKey = 'player_down';
+    } else if (angle >= 112.5 && angle < 157.5) {
+      textureKey = 'player_downLeft';
+    } else if (angle >= 157.5 || angle < -157.5) {
+      textureKey = 'player_left';
+    } else if (angle >= -157.5 && angle < -112.5) {
+      textureKey = 'player_upLeft';
+    } else if (angle >= -112.5 && angle < -67.5) {
+      textureKey = 'player_up';
+    } else if (angle >= -67.5 && angle < -22.5) {
+      textureKey = 'player_upRight';
+    }
+    
+    // Only change texture if it's different to avoid unnecessary updates
+    if (this.texture && this.texture.key !== textureKey) {
+      // Check if texture exists before setting
+      if (this.scene.textures.exists(textureKey)) {
+        this.setTexture(textureKey);
+        this.setFrame(0); // Reset to first frame
+        this.clearTint(); // Clear any tint that might be applied
+      }
     }
   }
 
@@ -101,6 +159,22 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       const direction = new Phaser.Math.Vector2(worldPoint.x - this.x, worldPoint.y - this.y).normalize();
 
       bullet.setVelocity(direction.x * 400, direction.y * 400);
+      
+      // Muzzle flash particle effect
+      const muzzleFlash = this.scene.add.particles(
+        this.x + direction.x * 12,
+        this.y + direction.y * 12,
+        'bullet',
+        {
+          speed: { min: 50, max: 150 },
+          scale: { start: 0.3, end: 0 },
+          lifespan: 100,
+          quantity: 3,
+          tint: [0xffff00, 0xffaa00, 0xff6600],
+        }
+      );
+      muzzleFlash.setDepth(this.y + 11);
+      this.scene.time.delayedCall(100, () => muzzleFlash.destroy());
 
       // Update bullet depth continuously as it moves
       const depthUpdateTimer = this.scene.time.addEvent({
