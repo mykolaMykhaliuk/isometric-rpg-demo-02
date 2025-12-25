@@ -22,7 +22,9 @@ export class CityScene extends Phaser.Scene {
   private offsetY: number = 100;
   private spawnTimer: number = 0;
   private spawnDelay: number = 5000;
+  private baseSpawnDelay: number = 5000;
   private maxEnemies: number = 10;
+  private baseMaxEnemies: number = 10;
 
   // Map legend:
   // 0 = ground, 1 = road, 2 = building, 3 = water, 4 = door position
@@ -88,6 +90,12 @@ export class CityScene extends Phaser.Scene {
     this.setupCamera();
     this.setupCollisions();
     this.setupEvents();
+
+    // Get current score from UIScene to maintain difficulty
+    const uiScene = this.scene.get('UIScene') as any;
+    if (uiScene && uiScene.getScore) {
+      this.updateDifficultyBasedOnScore(uiScene.getScore());
+    }
   }
 
   private createMap(): void {
@@ -318,18 +326,25 @@ export class CityScene extends Phaser.Scene {
 
   private setupCollisions(): void {
     // Bullet vs Enemy collisions
-    this.physics.add.overlap(
-      this.player.getBullets(),
-      this.enemies,
-      this.handleBulletEnemyCollision,
-      undefined,
-      this
-    );
+    const bullets = this.player.getBullets();
+    if (bullets) {
+      this.physics.add.overlap(
+        bullets,
+        this.enemies,
+        this.handleBulletEnemyCollision,
+        undefined,
+        this
+      );
+    }
 
     // Player vs Building collisions
     if (this.buildingBodies) {
       this.physics.add.collider(this.player, this.buildingBodies);
     }
+  }
+
+  getEnemies(): Phaser.Physics.Arcade.Group {
+    return this.enemies;
   }
 
   private handleBulletEnemyCollision(
@@ -387,6 +402,12 @@ export class CityScene extends Phaser.Scene {
       const uiScene = this.scene.get('UIScene');
       uiScene.events.emit('showGameOver');
     });
+
+    // Listen for score updates from UIScene
+    const uiScene = this.scene.get('UIScene');
+    uiScene.events.on('scoreUpdated', (newScore: number) => {
+      this.updateDifficultyBasedOnScore(newScore);
+    });
   }
 
   private tryEnterBuilding(): void {
@@ -414,7 +435,20 @@ export class CityScene extends Phaser.Scene {
       buildingId,
       playerHealth: this.player.getHealth(),
       playerAmmo: this.player.getAmmo(),
+      currentWeapon: this.player.getCurrentWeaponType(),
     });
+  }
+
+  private updateDifficultyBasedOnScore(newScore: number): void {
+    // Calculate difficulty multiplier based on score
+    // Every 50 points increases difficulty
+    const difficultyLevel = Math.floor(newScore / 50);
+
+    // Increase max enemies: +2 enemies per difficulty level, capped at 30
+    this.maxEnemies = Math.min(this.baseMaxEnemies + difficultyLevel * 2, 30);
+
+    // Decrease spawn delay: faster spawning as score increases, minimum 1 second
+    this.spawnDelay = Math.max(this.baseSpawnDelay - difficultyLevel * 400, 1000);
   }
 
   update(time: number, delta: number): void {

@@ -2,11 +2,13 @@ import Phaser from 'phaser';
 import { Player } from '../entities/Player';
 import { Enemy } from '../entities/Enemy';
 import { cartToIso } from '../utils/IsometricUtils';
+import { WeaponType } from '../weapons/IWeapon';
 
 interface BuildingData {
   buildingId: number;
   playerHealth: number;
   playerAmmo: number;
+  currentWeapon?: WeaponType;
 }
 
 export class BuildingScene extends Phaser.Scene {
@@ -15,10 +17,12 @@ export class BuildingScene extends Phaser.Scene {
   private buildingId: number = 0;
   private initialHealth: number = 100;
   private initialAmmo: number = 30;
+  private initialWeapon: WeaponType = WeaponType.GUN;
   private mapWidth: number = 12;
   private mapHeight: number = 10;
   private offsetX: number = 400;
   private offsetY: number = 150;
+  private currentScore: number = 0;
 
   // Interior map: 0 = floor, 1 = wall, 2 = exit door
   private interiorMaps: number[][][] = [
@@ -87,9 +91,16 @@ export class BuildingScene extends Phaser.Scene {
     this.buildingId = data.buildingId % this.interiorMaps.length;
     this.initialHealth = data.playerHealth || 100;
     this.initialAmmo = data.playerAmmo || 30;
+    this.initialWeapon = data.currentWeapon || WeaponType.GUN;
   }
 
   create(): void {
+    // Get current score from UIScene to maintain difficulty
+    const uiScene = this.scene.get('UIScene') as any;
+    if (uiScene && uiScene.getScore) {
+      this.currentScore = uiScene.getScore();
+    }
+
     this.createInterior();
     this.createPlayer();
     this.createEnemyGroup();
@@ -193,6 +204,9 @@ export class BuildingScene extends Phaser.Scene {
       this.player.takeDamage(100 - this.initialHealth);
     }
     this.player.setAmmo(this.initialAmmo);
+
+    // Restore weapon state
+    this.player.setWeapon(this.initialWeapon);
   }
 
   private createEnemyGroup(): void {
@@ -204,7 +218,14 @@ export class BuildingScene extends Phaser.Scene {
 
   private spawnInteriorEnemies(): void {
     const currentMap = this.interiorMaps[this.buildingId];
-    const numEnemies = Phaser.Math.Between(2, 4);
+
+    // Scale enemy count based on score
+    const difficultyLevel = Math.floor(this.currentScore / 50);
+    const baseMin = 2;
+    const baseMax = 4;
+    const minEnemies = Math.min(baseMin + difficultyLevel, 8);
+    const maxEnemies = Math.min(baseMax + difficultyLevel, 10);
+    const numEnemies = Phaser.Math.Between(minEnemies, maxEnemies);
 
     for (let i = 0; i < numEnemies; i++) {
       let attempts = 0;
@@ -237,18 +258,25 @@ export class BuildingScene extends Phaser.Scene {
 
   private setupCollisions(): void {
     // Bullet vs Enemy
-    this.physics.add.overlap(
-      this.player.getBullets(),
-      this.enemies,
-      this.handleBulletEnemyCollision,
-      undefined,
-      this
-    );
+    const bullets = this.player.getBullets();
+    if (bullets) {
+      this.physics.add.overlap(
+        bullets,
+        this.enemies,
+        this.handleBulletEnemyCollision,
+        undefined,
+        this
+      );
+    }
 
     // Player vs Walls
     if (this.wallBodies) {
       this.physics.add.collider(this.player, this.wallBodies);
     }
+  }
+
+  getEnemies(): Phaser.Physics.Arcade.Group {
+    return this.enemies;
   }
 
   private handleBulletEnemyCollision(
@@ -305,6 +333,12 @@ export class BuildingScene extends Phaser.Scene {
       this.scene.pause();
       const uiScene = this.scene.get('UIScene');
       uiScene.events.emit('showGameOver');
+    });
+
+    // Listen for score updates from UIScene
+    const uiScene = this.scene.get('UIScene');
+    uiScene.events.on('scoreUpdated', (newScore: number) => {
+      this.currentScore = newScore;
     });
   }
 

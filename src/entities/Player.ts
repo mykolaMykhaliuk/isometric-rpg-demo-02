@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { WeaponManager } from '../managers/WeaponManager';
+import { IWeapon, WeaponType } from '../weapons/IWeapon';
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
   private cursors: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -6,11 +8,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private speed: number = 150;
   private health: number = 100;
   private maxHealth: number = 100;
-  private ammo: number = 30;
-  private maxAmmo: number = 30;
-  private shootCooldown: number = 0;
-  private shootDelay: number = 200;
-  private bullets: Phaser.Physics.Arcade.Group;
+  private weaponManager: WeaponManager;
+  private currentWeapon: IWeapon;
+  private weaponSwitchCooldown: number = 0;
+  private weaponSwitchDelay: number = 300;
+  private lastAutoSwitch: number = 0;
+  private autoSwitchCooldown: number = 1000;
   public lastDirection: Phaser.Math.Vector2 = new Phaser.Math.Vector2(1, 0);
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
@@ -39,16 +42,35 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       D: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     };
 
-    this.bullets = scene.physics.add.group({
-      classType: Phaser.Physics.Arcade.Sprite,
-      maxSize: 50,
-      runChildUpdate: true,
+    // Initialize weapon system
+    this.weaponManager = new WeaponManager(scene);
+    this.currentWeapon = this.weaponManager.getCurrentWeapon();
+
+    // Setup weapon switching
+    this.setupWeaponSwitching();
+  }
+
+  private setupWeaponSwitching(): void {
+    // Number keys for weapon switching
+    const key1 = this.scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ONE);
+    const key2 = this.scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.TWO);
+
+    key1.on('down', () => this.switchWeapon(WeaponType.GUN));
+    key2.on('down', () => this.switchWeapon(WeaponType.SWORD));
+
+    // Mouse wheel for weapon cycling
+    this.scene.input.on('wheel', (_pointer: any, _gameObjects: any, _deltaX: number, deltaY: number, _deltaZ: number) => {
+      if (deltaY > 0) {
+        this.cycleWeaponNext();
+      } else if (deltaY < 0) {
+        this.cycleWeaponPrevious();
+      }
     });
   }
 
   update(time: number, _delta: number): void {
     this.handleMovement();
-    this.handleShooting(time);
+    this.handleAttack(time);
     this.updateDepth();
   }
 
@@ -130,84 +152,71 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
   }
 
-  private handleShooting(time: number): void {
+  private handleAttack(time: number): void {
     const pointer = this.scene.input.activePointer;
 
-    if (pointer.isDown && time > this.shootCooldown && this.ammo > 0) {
-      this.shoot(pointer);
-      this.shootCooldown = time + this.shootDelay;
-      this.ammo--;
-      this.scene.events.emit('ammoChanged', this.ammo, this.maxAmmo);
+    // Auto-switch to sword if gun has no ammo
+    if (
+      this.currentWeapon.getWeaponType() === WeaponType.GUN &&
+      !this.currentWeapon.hasAmmo()
+    ) {
+      const now = this.scene.time.now;
+      if (now - this.lastAutoSwitch > this.autoSwitchCooldown) {
+        this.switchWeapon(WeaponType.SWORD);
+        this.scene.events.emit('weaponAutoSwitch', WeaponType.SWORD);
+        this.lastAutoSwitch = now;
+      }
+    }
+
+    if (pointer.isDown && this.currentWeapon.canAttack(time)) {
+      this.currentWeapon.attack(time, pointer, this);
     }
   }
 
-  private shoot(pointer: Phaser.Input.Pointer): void {
-    const bullet = this.bullets.get(this.x, this.y, 'bullet') as Phaser.Physics.Arcade.Sprite;
+  switchWeapon(weaponType: WeaponType): void {
+    const currentTime = this.scene.time.now;
 
-    if (bullet) {
-      bullet.setActive(true);
-      bullet.setVisible(true);
-      // Set depth based on Y position to ensure bullets appear above tiles
-      bullet.setDepth(bullet.y + 10);
-      
-      // Re-enable physics body (it may have been disabled on collision)
-      if (bullet.body) {
-        bullet.body.enable = true;
-      }
+    // Prevent switch if on cooldown
+    if (currentTime < this.weaponSwitchCooldown) return;
 
-      const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
-      const direction = new Phaser.Math.Vector2(worldPoint.x - this.x, worldPoint.y - this.y).normalize();
+    // Prevent switch if already equipped
+    if (this.currentWeapon.getWeaponType() === weaponType) return;
 
-      bullet.setVelocity(direction.x * 400, direction.y * 400);
-      
-      // Muzzle flash particle effect
-      const muzzleFlash = this.scene.add.particles(
-        this.x + direction.x * 12,
-        this.y + direction.y * 12,
-        'bullet',
-        {
-          speed: { min: 50, max: 150 },
-          scale: { start: 0.3, end: 0 },
-          lifespan: 100,
-          quantity: 3,
-          tint: [0xffff00, 0xffaa00, 0xff6600],
-        }
-      );
-      muzzleFlash.setDepth(this.y + 11);
-      this.scene.time.delayedCall(100, () => muzzleFlash.destroy());
+    // Prevent switch during active attack
+    if (this.currentWeapon.isAttacking()) return;
 
-      // Update bullet depth continuously as it moves
-      const depthUpdateTimer = this.scene.time.addEvent({
-        delay: 16, // ~60fps
-        callback: () => {
-          if (bullet.active && bullet.visible) {
-            bullet.setDepth(bullet.y + 10);
-          } else {
-            depthUpdateTimer.remove();
-          }
-        },
-        loop: true,
-      });
+    // Perform switch
+    const newWeapon = this.weaponManager.getWeapon(weaponType);
+    if (newWeapon) {
+      this.currentWeapon = newWeapon;
+      this.weaponManager.setCurrentWeapon(weaponType);
+      this.weaponSwitchCooldown = currentTime + this.weaponSwitchDelay;
 
-      this.scene.time.delayedCall(2000, () => {
-        depthUpdateTimer.remove();
-        if (bullet.active) {
-          bullet.setActive(false);
-          bullet.setVisible(false);
-          if (bullet.body) {
-            bullet.body.enable = false;
-          }
-        }
-      });
+      // Emit event for UI update
+      this.scene.events.emit('weaponChanged', weaponType, this.currentWeapon);
     }
+  }
+
+  private cycleWeaponNext(): void {
+    const weapons = [WeaponType.GUN, WeaponType.SWORD];
+    const currentIndex = weapons.indexOf(this.currentWeapon.getWeaponType());
+    const nextIndex = (currentIndex + 1) % weapons.length;
+    this.switchWeapon(weapons[nextIndex]);
+  }
+
+  private cycleWeaponPrevious(): void {
+    const weapons = [WeaponType.GUN, WeaponType.SWORD];
+    const currentIndex = weapons.indexOf(this.currentWeapon.getWeaponType());
+    const prevIndex = (currentIndex - 1 + weapons.length) % weapons.length;
+    this.switchWeapon(weapons[prevIndex]);
   }
 
   private updateDepth(): void {
     this.setDepth(this.y + 10);
   }
 
-  getBullets(): Phaser.Physics.Arcade.Group {
-    return this.bullets;
+  getBullets(): Phaser.Physics.Arcade.Group | undefined {
+    return this.currentWeapon.getBullets?.();
   }
 
   takeDamage(amount: number): void {
@@ -230,13 +239,19 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   addAmmo(amount: number): void {
-    this.ammo = Math.min(this.ammo + amount, this.maxAmmo);
-    this.scene.events.emit('ammoChanged', this.ammo, this.maxAmmo);
+    // Always add to gun ammo, even if sword is equipped
+    const gun = this.weaponManager.getWeapon(WeaponType.GUN);
+    if (gun) {
+      gun.addAmmo(amount);
+    }
   }
 
   setAmmo(amount: number): void {
-    this.ammo = Math.min(Math.max(0, amount), this.maxAmmo);
-    this.scene.events.emit('ammoChanged', this.ammo, this.maxAmmo);
+    // Set gun ammo
+    const gun = this.weaponManager.getWeapon(WeaponType.GUN);
+    if (gun) {
+      gun.setAmmo(amount);
+    }
   }
 
   getHealth(): number {
@@ -248,17 +263,29 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   getAmmo(): number {
-    return this.ammo;
+    const gun = this.weaponManager.getWeapon(WeaponType.GUN);
+    return gun ? gun.getAmmoCount() : 0;
   }
 
   getMaxAmmo(): number {
-    return this.maxAmmo;
+    const gun = this.weaponManager.getWeapon(WeaponType.GUN);
+    return gun ? gun.getMaxAmmo() : 30;
+  }
+
+  getCurrentWeaponType(): WeaponType {
+    return this.currentWeapon.getWeaponType();
+  }
+
+  setWeapon(weaponType: WeaponType): void {
+    this.switchWeapon(weaponType);
   }
 
   resetStats(): void {
     this.health = this.maxHealth;
-    this.ammo = this.maxAmmo;
+    const gun = this.weaponManager.getWeapon(WeaponType.GUN);
+    if (gun) {
+      gun.setAmmo(gun.getMaxAmmo());
+    }
     this.scene.events.emit('healthChanged', this.health, this.maxHealth);
-    this.scene.events.emit('ammoChanged', this.ammo, this.maxAmmo);
   }
 }

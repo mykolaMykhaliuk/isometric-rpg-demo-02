@@ -17,6 +17,8 @@ export class BootScene extends Phaser.Scene {
     this.createBulletSprite();
     this.createDoorSprite();
     this.createAmmoSprite();
+    this.createWeaponIcons();
+    this.createSwordSprite();
 
     this.scene.start('CityScene');
     this.scene.launch('UIScene');
@@ -698,6 +700,69 @@ export class BootScene extends Phaser.Scene {
     graphics.fillRect(2, 4, 12, 1);
 
     graphics.generateTexture('ammo', 16, 12);
+    graphics.destroy();
+  }
+
+  private createWeaponIcons(): void {
+    // Gun icon (16x16)
+    const gunIcon = this.make.graphics({ x: 0, y: 0 });
+    gunIcon.fillStyle(0x444444, 1);
+    gunIcon.fillRect(2, 6, 8, 4);
+    gunIcon.fillStyle(0x222222, 1);
+    gunIcon.fillRect(10, 7, 6, 2);
+    gunIcon.fillStyle(0x666666, 0.6);
+    gunIcon.fillRect(2, 6, 8, 1);
+    gunIcon.generateTexture('weapon_gun_icon', 16, 16);
+    gunIcon.destroy();
+
+    // Sword icon (16x16)
+    const swordIcon = this.make.graphics({ x: 0, y: 0 });
+    // Blade
+    swordIcon.fillStyle(0xcccccc, 1);
+    swordIcon.fillRect(7, 2, 2, 10);
+    // Tip
+    swordIcon.fillTriangle(6, 2, 10, 2, 8, 0);
+    // Cross-guard
+    swordIcon.fillStyle(0x8b7355, 1);
+    swordIcon.fillRect(5, 11, 6, 2);
+    // Handle
+    swordIcon.fillStyle(0x654321, 1);
+    swordIcon.fillRect(7, 13, 2, 3);
+    // Highlight
+    swordIcon.fillStyle(0xffffff, 0.6);
+    swordIcon.fillRect(7, 3, 1, 8);
+    swordIcon.generateTexture('weapon_sword_icon', 16, 16);
+    swordIcon.destroy();
+  }
+
+  private createSwordSprite(): void {
+    const graphics = this.make.graphics({ x: 0, y: 0 });
+
+    // Blade (24x4 horizontal)
+    graphics.fillStyle(0xcccccc, 1);
+    graphics.fillRect(0, 10, 20, 3);
+
+    // Blade edge highlight
+    graphics.fillStyle(0xffffff, 0.8);
+    graphics.fillRect(0, 10, 20, 1);
+
+    // Blade edge shadow
+    graphics.fillStyle(0x888888, 0.6);
+    graphics.fillRect(0, 12, 20, 1);
+
+    // Tip
+    graphics.fillStyle(0xcccccc, 1);
+    graphics.fillTriangle(20, 9, 20, 14, 24, 11.5);
+
+    // Cross-guard
+    graphics.fillStyle(0x8b7355, 1);
+    graphics.fillRect(-2, 8, 4, 8);
+
+    // Handle
+    graphics.fillStyle(0x654321, 1);
+    graphics.fillRect(-6, 10, 4, 4);
+
+    graphics.generateTexture('sword_sprite', 32, 24);
     graphics.destroy();
   }
 }

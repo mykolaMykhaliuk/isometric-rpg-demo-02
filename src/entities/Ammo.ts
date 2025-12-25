@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { Player } from './Player';
 
 export class Ammo extends Phaser.Physics.Arcade.Sprite {
-  private ammoAmount: number = 15;
+  private ammoAmount: number = 30;
   private pickupRange: number = 30;
   private player: Player | null = null;
   private isPickedUp: boolean = false;
@@ -34,7 +34,7 @@ export class Ammo extends Phaser.Physics.Arcade.Sprite {
     this.player = player;
   }
 
-  update(time: number, _delta: number): void {
+  update(_time: number, _delta: number): void {
     if (!this.active || this.isPickedUp) return;
 
     // Floating animation

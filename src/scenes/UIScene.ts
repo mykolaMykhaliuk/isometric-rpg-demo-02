@@ -1,10 +1,13 @@
 import Phaser from 'phaser';
+import { WeaponType } from '../weapons/IWeapon';
 
 export class UIScene extends Phaser.Scene {
   private healthBar!: Phaser.GameObjects.Graphics;
   private healthText!: Phaser.GameObjects.Text;
   private ammoText!: Phaser.GameObjects.Text;
   private scoreText!: Phaser.GameObjects.Text;
+  private weaponIcon!: Phaser.GameObjects.Image;
+  private weaponText!: Phaser.GameObjects.Text;
   private score: number = 0;
   private gameOverContainer!: Phaser.GameObjects.Container;
 
@@ -15,6 +18,7 @@ export class UIScene extends Phaser.Scene {
   create(): void {
     this.createHealthBar();
     this.createAmmoDisplay();
+    this.createWeaponDisplay();
     this.createScoreDisplay();
     this.createControls();
     this.createGameOverScreen();
@@ -87,13 +91,107 @@ export class UIScene extends Phaser.Scene {
     });
   }
 
-  private updateAmmoDisplay(current: number, max: number): void {
-    this.ammoText.setText(`${current}/${max}`);
-    if (current <= 5) {
-      this.ammoText.setColor('#ff0000');
+  private updateAmmoDisplay(current: number, max: number, weaponType?: WeaponType): void {
+    if (weaponType === WeaponType.SWORD) {
+      this.ammoText.setText('∞');
+      this.ammoText.setColor('#aaaaaa');
     } else {
-      this.ammoText.setColor('#ffff00');
+      this.ammoText.setText(`${current}/${max}`);
+      if (current <= 5) {
+        this.ammoText.setColor('#ff0000');
+      } else {
+        this.ammoText.setColor('#ffff00');
+      }
     }
+  }
+
+  private createWeaponDisplay(): void {
+    const x = 20;
+    const y = 75;
+
+    this.add.text(x, y, 'WEAPON', {
+      fontSize: '14px',
+      color: '#aaaaaa',
+    });
+
+    this.weaponIcon = this.add.image(x + 70, y + 8, 'weapon_gun_icon');
+    this.weaponIcon.setScale(0.8);
+
+    this.weaponText = this.add.text(x + 90, y, 'Gun', {
+      fontSize: '16px',
+      color: '#ffff00',
+      fontStyle: 'bold',
+    });
+  }
+
+  private updateWeaponDisplay(weaponType: WeaponType): void {
+    if (weaponType === WeaponType.GUN) {
+      this.weaponIcon.setTexture('weapon_gun_icon');
+      this.weaponText.setText('Gun');
+      this.weaponText.setColor('#ffff00');
+    } else if (weaponType === WeaponType.SWORD) {
+      this.weaponIcon.setTexture('weapon_sword_icon');
+      this.weaponText.setText('Sword');
+      this.weaponText.setColor('#cccccc');
+    }
+
+    // Pulse animation
+    this.tweens.add({
+      targets: [this.weaponIcon, this.weaponText],
+      scale: 1.2,
+      duration: 150,
+      yoyo: true,
+    });
+  }
+
+  private showWeaponSwitchMessage(weaponType: WeaponType): void {
+    const message = this.add
+      .text(
+        this.cameras.main.width / 2,
+        this.cameras.main.height / 2 + 50,
+        weaponType === WeaponType.GUN ? 'Switched to Gun [1]' : 'Switched to Sword [2]',
+        {
+          fontSize: '18px',
+          color: '#ffffff',
+          backgroundColor: '#000000',
+          padding: { x: 10, y: 5 },
+        }
+      )
+      .setOrigin(0.5)
+      .setDepth(999);
+
+    this.tweens.add({
+      targets: message,
+      alpha: 0,
+      duration: 500,
+      delay: 500,
+      onComplete: () => message.destroy(),
+    });
+  }
+
+  private showAutoSwitchMessage(): void {
+    const message = this.add
+      .text(
+        this.cameras.main.width / 2,
+        this.cameras.main.height / 2 + 50,
+        'Out of ammo! Switched to Sword',
+        {
+          fontSize: '18px',
+          color: '#ff0000',
+          backgroundColor: '#000000',
+          padding: { x: 10, y: 5 },
+        }
+      )
+      .setOrigin(0.5)
+      .setDepth(999);
+
+    this.tweens.add({
+      targets: message,
+      alpha: 0,
+      duration: 500,
+      delay: 1000,
+      onComplete: () => message.destroy(),
+    });
   }
 
   private createScoreDisplay(): void {
@@ -115,6 +213,9 @@ export class UIScene extends Phaser.Scene {
   private updateScore(points: number): void {
     this.score += points;
     this.scoreText.setText(this.score.toString());
+
+    // Emit score update event for other scenes
+    this.events.emit('scoreUpdated', this.score);
 
     // Score pop effect
     this.tweens.add({
@@ -215,8 +316,18 @@ export class UIScene extends Phaser.Scene {
         this.updateHealthBar(current, max);
       });
 
-      gameScene.events.on('ammoChanged', (current: number, max: number) => {
-        this.updateAmmoDisplay(current, max);
+      gameScene.events.on('ammoChanged', (current: number, max: number, weaponType?: WeaponType) => {
+        this.updateAmmoDisplay(current, max, weaponType);
+      });
+
+      gameScene.events.on('weaponChanged', (weaponType: WeaponType, weapon: any) => {
+        this.updateWeaponDisplay(weaponType);
+        this.updateAmmoDisplay(weapon.getAmmoCount(), weapon.getMaxAmmo(), weaponType);
+        this.showWeaponSwitchMessage(weaponType);
+      });
+
+      gameScene.events.on('weaponAutoSwitch', (_weaponType: WeaponType) => {
+        this.showAutoSwitchMessage();
       });
     });
 
@@ -228,5 +339,14 @@ export class UIScene extends Phaser.Scene {
     this.events.on('showGameOver', () => {
       this.showGameOver();
     });
+
+    // Provide current score when requested
+    this.events.on('getScore', (callback: (score: number) => void) => {
+      callback(this.score);
+    });
+  }
+
+  getScore(): number {
+    return this.score;
   }
 }
