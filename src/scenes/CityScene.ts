@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { Player } from '../entities/Player';
 import { Enemy } from '../entities/Enemy';
+import { Ammo } from '../entities/Ammo';
 import { cartToIso } from '../utils/IsometricUtils';
 
 interface DoorData {
@@ -11,7 +12,8 @@ interface DoorData {
 
 export class CityScene extends Phaser.Scene {
   private player!: Player;
-  private enemies!: Phaser.GameObjects.Group;
+  private enemies!: Phaser.Physics.Arcade.Group;
+  private ammoItems!: Phaser.Physics.Arcade.Group;
   private doors: DoorData[] = [];
   private mapWidth: number = 20;
   private mapHeight: number = 20;
@@ -54,7 +56,9 @@ export class CityScene extends Phaser.Scene {
     this.createMap();
     this.createPlayer();
     this.createEnemyGroup();
+    this.createAmmoGroup();
     this.spawnInitialEnemies();
+    this.spawnAmmoItems();
     this.setupCamera();
     this.setupCollisions();
     this.setupEvents();
@@ -132,8 +136,15 @@ export class CityScene extends Phaser.Scene {
   }
 
   private createEnemyGroup(): void {
-    this.enemies = this.add.group({
+    this.enemies = this.physics.add.group({
       classType: Enemy,
+      runChildUpdate: true,
+    });
+  }
+
+  private createAmmoGroup(): void {
+    this.ammoItems = this.physics.add.group({
+      classType: Ammo,
       runChildUpdate: true,
     });
   }
@@ -141,6 +152,35 @@ export class CityScene extends Phaser.Scene {
   private spawnInitialEnemies(): void {
     for (let i = 0; i < 5; i++) {
       this.spawnEnemy();
+    }
+  }
+
+  private spawnAmmoItems(): void {
+    // Spawn ammo at various locations on the map
+    const ammoSpawnPositions = [
+      { x: 2, y: 2 },
+      { x: 6, y: 6 },
+      { x: 13, y: 6 },
+      { x: 17, y: 2 },
+      { x: 6, y: 13 },
+      { x: 13, y: 13 },
+      { x: 9, y: 9 },
+      { x: 2, y: 17 },
+      { x: 17, y: 17 },
+    ];
+
+    for (const pos of ammoSpawnPositions) {
+      const tileType = this.cityMap[pos.y]?.[pos.x];
+      // Only spawn on ground (0) or road (1) tiles
+      if (tileType === 0 || tileType === 1) {
+        const isoPos = cartToIso(pos.x, pos.y);
+        const spawnX = isoPos.x + this.offsetX;
+        const spawnY = isoPos.y + this.offsetY;
+
+        const ammo = new Ammo(this, spawnX, spawnY);
+        ammo.setPlayer(this.player);
+        this.ammoItems.add(ammo);
+      }
     }
   }
 
@@ -225,9 +265,17 @@ export class CityScene extends Phaser.Scene {
     const bulletSprite = bullet as Phaser.Physics.Arcade.Sprite;
     const enemyEntity = enemy as Enemy;
 
+    // Guard against invalid or already processed objects
+    if (!bulletSprite || !bulletSprite.active) return;
+    if (!enemyEntity || !enemyEntity.active || enemyEntity.isEnemyDying()) return;
+
+    // Disable bullet completely to prevent further collisions
     bulletSprite.setActive(false);
     bulletSprite.setVisible(false);
     bulletSprite.setVelocity(0, 0);
+    if (bulletSprite.body) {
+      bulletSprite.body.enable = false;
+    }
 
     enemyEntity.takeDamage(20);
   }
