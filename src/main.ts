@@ -18,8 +18,8 @@ const config: Phaser.Types.Core.GameConfig = {
     },
   },
   scene: [BootScene, CityScene, BuildingScene, UIScene],
-  pixelArt: true,
-  antialias: false,
+  pixelArt: false,
+  antialias: true,
 };
 
 new Phaser.Game(config);

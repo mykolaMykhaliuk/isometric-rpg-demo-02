@@ -155,12 +155,31 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
     this.scene.events.emit('enemyKilled', 10);
 
-    // Death animation
+    // Explosion particle effect
+    const explosion = this.scene.add.particles(
+      this.x,
+      this.y,
+      'bullet',
+      {
+        speed: { min: 80, max: 200 },
+        scale: { start: 0.5, end: 0 },
+        lifespan: 300,
+        quantity: 8,
+        tint: [0x44aa44, 0x66cc66, 0x88ff88, 0xffff00],
+        emitZone: { type: 'edge', source: new Phaser.Geom.Circle(0, 0, 8), quantity: 8 },
+      }
+    );
+    explosion.setDepth(this.y + 5);
+    this.scene.time.delayedCall(300, () => explosion.destroy());
+
+    // Death animation with rotation
     this.scene.tweens.add({
       targets: this,
       alpha: 0,
-      scale: 0.5,
-      duration: 200,
+      scale: 0.3,
+      angle: 360,
+      duration: 300,
+      ease: 'Power2',
       onComplete: () => {
         this.destroy();
       },
