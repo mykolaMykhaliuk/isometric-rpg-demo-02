@@ -11,7 +11,7 @@ interface BuildingData {
 
 export class BuildingScene extends Phaser.Scene {
   private player!: Player;
-  private enemies!: Phaser.GameObjects.Group;
+  private enemies!: Phaser.Physics.Arcade.Group;
   private buildingId: number = 0;
   private initialHealth: number = 100;
   private initialAmmo: number = 30;
@@ -168,7 +168,7 @@ export class BuildingScene extends Phaser.Scene {
   }
 
   private createEnemyGroup(): void {
-    this.enemies = this.add.group({
+    this.enemies = this.physics.add.group({
       classType: Enemy,
       runChildUpdate: true,
     });
@@ -232,11 +232,15 @@ export class BuildingScene extends Phaser.Scene {
 
     // Guard against invalid or already processed objects
     if (!bulletSprite || !bulletSprite.active) return;
-    if (!enemyEntity || !enemyEntity.active) return;
+    if (!enemyEntity || !enemyEntity.active || enemyEntity.isEnemyDying()) return;
 
+    // Disable bullet completely to prevent further collisions
     bulletSprite.setActive(false);
     bulletSprite.setVisible(false);
     bulletSprite.setVelocity(0, 0);
+    if (bulletSprite.body) {
+      bulletSprite.body.enable = false;
+    }
 
     enemyEntity.takeDamage(20);
   }

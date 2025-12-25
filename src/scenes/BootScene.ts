@@ -16,6 +16,7 @@ export class BootScene extends Phaser.Scene {
     this.createEnemySprite();
     this.createBulletSprite();
     this.createDoorSprite();
+    this.createAmmoSprite();
 
     this.scene.start('CityScene');
     this.scene.launch('UIScene');
@@ -267,6 +268,32 @@ export class BootScene extends Phaser.Scene {
     graphics.fillCircle(22, 26, 3);
 
     graphics.generateTexture('door', 32, 48);
+    graphics.destroy();
+  }
+
+  private createAmmoSprite(): void {
+    const graphics = this.make.graphics({ x: 0, y: 0 });
+
+    // Ammo box/crate
+    graphics.fillStyle(0x8b4513, 1);
+    graphics.fillRect(0, 0, 16, 12);
+
+    // Ammo box top
+    graphics.fillStyle(0x654321, 1);
+    graphics.fillRect(0, 0, 16, 4);
+
+    // Ammo bullets inside
+    graphics.fillStyle(0xffd700, 1);
+    graphics.fillRect(3, 6, 2, 4);
+    graphics.fillRect(6, 6, 2, 4);
+    graphics.fillRect(9, 6, 2, 4);
+    graphics.fillRect(12, 6, 2, 4);
+
+    // Highlight
+    graphics.lineStyle(1, 0xffffff, 0.5);
+    graphics.strokeRect(0, 0, 16, 12);
+
+    graphics.generateTexture('ammo', 16, 12);
     graphics.destroy();
   }
 }
