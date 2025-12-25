@@ -12,6 +12,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private wanderTarget: Phaser.Math.Vector2 | null = null;
   private wanderTimer: number = 0;
   private player: Player | null = null;
+  private isDying: boolean = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, 'enemy_bug');
@@ -33,7 +34,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   }
 
   update(time: number, _delta: number): void {
-    if (!this.player || !this.active) return;
+    if (!this.player || !this.active || this.isDying) return;
 
     const distanceToPlayer = Phaser.Math.Distance.Between(
       this.x,
@@ -121,6 +122,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   }
 
   takeDamage(amount: number): boolean {
+    // Prevent damage if already dying
+    if (this.isDying || !this.active) return false;
+
     this.health -= amount;
 
     this.setTint(0xffffff);
@@ -136,6 +140,19 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   }
 
   private die(): void {
+    // Prevent multiple die() calls
+    if (this.isDying) return;
+    this.isDying = true;
+
+    // Stop all movement and disable physics body immediately
+    this.setVelocity(0, 0);
+    if (this.body) {
+      this.body.enable = false;
+    }
+    
+    // Mark as inactive immediately to prevent collision callbacks
+    this.setActive(false);
+
     this.scene.events.emit('enemyKilled', 10);
 
     // Death animation
@@ -152,5 +169,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
   getHealth(): number {
     return this.health;
+  }
+
+  isEnemyDying(): boolean {
+    return this.isDying;
   }
 }

@@ -89,17 +89,40 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (bullet) {
       bullet.setActive(true);
       bullet.setVisible(true);
-      bullet.setDepth(9);
+      // Set depth based on Y position to ensure bullets appear above tiles
+      bullet.setDepth(bullet.y + 10);
+      
+      // Re-enable physics body (it may have been disabled on collision)
+      if (bullet.body) {
+        bullet.body.enable = true;
+      }
 
       const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
       const direction = new Phaser.Math.Vector2(worldPoint.x - this.x, worldPoint.y - this.y).normalize();
 
       bullet.setVelocity(direction.x * 400, direction.y * 400);
 
+      // Update bullet depth continuously as it moves
+      const depthUpdateTimer = this.scene.time.addEvent({
+        delay: 16, // ~60fps
+        callback: () => {
+          if (bullet.active && bullet.visible) {
+            bullet.setDepth(bullet.y + 10);
+          } else {
+            depthUpdateTimer.remove();
+          }
+        },
+        loop: true,
+      });
+
       this.scene.time.delayedCall(2000, () => {
+        depthUpdateTimer.remove();
         if (bullet.active) {
           bullet.setActive(false);
           bullet.setVisible(false);
+          if (bullet.body) {
+            bullet.body.enable = false;
+          }
         }
       });
     }
