@@ -50,7 +50,7 @@ Create `src/ui/MobileControls.ts`:
 - Weapon 1/2: 50px each, right side above attack, show active state
 - Interact: 60px, appears dynamically near interactive elements
 
-### Step 3: Add Mobile Detection
+### Step 3: Add Mobile & Orientation Detection
 
 In `src/main.ts` or create `src/utils/DeviceUtils.ts`:
 
@@ -60,6 +60,10 @@ export function isMobileDevice(): boolean {
     || ('ontouchstart' in window)
     || (navigator.maxTouchPoints > 0);
 }
+
+export function isPortraitOrientation(): boolean {
+  return window.innerHeight > window.innerWidth;
+}
 ```
 
 Update Phaser config:
@@ -67,6 +71,14 @@ Update Phaser config:
 input: {
   activePointers: 3, // Support multiple simultaneous touches
 }
+```
+
+**Handle orientation changes in UIScene:**
+```typescript
+// Listen for resize events to reposition controls
+this.scale.on('resize', (gameSize: Phaser.Structs.Size) => {
+  this.repositionMobileControls(gameSize.width, gameSize.height);
+});
 ```
 
 ### Step 4: Integrate Joystick into Player Movement
@@ -137,19 +149,16 @@ if (isMobileDevice()) {
 private createMobileControls(): void {
   const { width, height } = this.cameras.main;
 
-  // Joystick - bottom left
-  this.joystick = new VirtualJoystick(this, 120, height - 120, 80);
-
-  // Attack button - bottom right
-  this.attackButton = new MobileButton(this, width - 100, height - 120, 70, 'attack');
-
-  // Weapon buttons - right side, above attack
-  this.gunButton = new MobileButton(this, width - 140, height - 220, 50, 'gun');
-  this.swordButton = new MobileButton(this, width - 60, height - 220, 50, 'sword');
-
-  // Interact button (initially hidden)
-  this.interactButton = new MobileButton(this, width / 2, height - 100, 60, 'interact');
+  // Create controls (initial positions will be set by repositionMobileControls)
+  this.joystick = new VirtualJoystick(this, 0, 0, 80);
+  this.attackButton = new MobileButton(this, 0, 0, 70, 'attack');
+  this.gunButton = new MobileButton(this, 0, 0, 50, 'gun');
+  this.swordButton = new MobileButton(this, 0, 0, 50, 'sword');
+  this.interactButton = new MobileButton(this, 0, 0, 60, 'interact');
   this.interactButton.setVisible(false);
+
+  // Position controls based on current orientation
+  this.repositionMobileControls(width, height);
 
   // Store in registry for Player access
   this.registry.set('mobileControls', {
@@ -162,6 +171,43 @@ private createMobileControls(): void {
   this.gunButton.on('pressed', () => this.emitWeaponSwitch(WeaponType.GUN));
   this.swordButton.on('pressed', () => this.emitWeaponSwitch(WeaponType.SWORD));
   this.interactButton.on('pressed', () => this.emitInteract());
+}
+
+private repositionMobileControls(width: number, height: number): void {
+  const isPortrait = height > width;
+
+  if (isPortrait) {
+    // PORTRAIT: Both controls centered at bottom
+    const centerX = width / 2;
+    const controlSpacing = 100; // Space between joystick and attack button
+
+    // Joystick - bottom center-left
+    this.joystick.setPosition(centerX - controlSpacing, height - 120);
+
+    // Attack button - bottom center-right
+    this.attackButton.setPosition(centerX + controlSpacing, height - 120);
+
+    // Weapon buttons - centered above controls
+    this.gunButton.setPosition(centerX - 40, height - 220);
+    this.swordButton.setPosition(centerX + 40, height - 220);
+
+    // Interact button - centered above joystick/attack
+    this.interactButton.setPosition(centerX, height - 300);
+  } else {
+    // LANDSCAPE: Controls in corners (original layout)
+    // Joystick - bottom left
+    this.joystick.setPosition(120, height - 120);
+
+    // Attack button - bottom right
+    this.attackButton.setPosition(width - 100, height - 120);
+
+    // Weapon buttons - right side above attack
+    this.gunButton.setPosition(width - 140, height - 220);
+    this.swordButton.setPosition(width - 60, height - 220);
+
+    // Interact button - center
+    this.interactButton.setPosition(width / 2, height - 100);
+  }
 }
 ```
 
@@ -215,16 +261,16 @@ Ensure controls don't interfere:
 | `src/scenes/BuildingScene.ts` | Emit exit proximity events |
 | `src/main.ts` | Update input config for multi-touch |
 
-## Control Layout Diagram
+## Control Layout Diagrams
+
+### Landscape Mode (width > height)
 
 ```
 ┌─────────────────────────────────────┐
 │  [HP Bar]              [Score: 0]   │
 │  [Armor]                            │
-│  [Ammo]                             │
-│  [Weapon]              [Gun][Sword] │
-│                                     │
-│                                     │
+│  [Ammo]              [Gun][Sword]   │
+│  [Weapon]                           │
 │                                     │
 │                                     │
 │                    [E]              │  ← Interact (when near door)
@@ -233,6 +279,27 @@ Ensure controls don't interfere:
 │   └───┘                    └───┘   │
 └─────────────────────────────────────┘
 ```
+
+### Portrait Mode (height > width)
+
+```
+┌───────────────────┐
+│ [HP]    [Score]   │
+│ [Armor]           │
+│ [Ammo] [Weapon]   │
+│                   │
+│                   │
+│                   │
+│                   │
+│        [E]        │  ← Interact
+│    [Gun][Sword]   │  ← Weapon buttons centered
+│   ┌───┐  ┌───┐    │
+│   │ ○ │  │ ⚔ │    │  ← Joystick + Attack centered
+│   └───┘  └───┘    │
+└───────────────────┘
+```
+
+Both joystick and attack button are positioned in the bottom center area for comfortable thumb access in portrait orientation.
 
 ## Testing Checklist
 
@@ -246,3 +313,6 @@ Ensure controls don't interfere:
 - [ ] Controls visible on mobile/touch devices
 - [ ] Multi-touch doesn't cause conflicts
 - [ ] Controls don't overlap with HUD elements
+- [ ] Portrait mode: controls centered at bottom
+- [ ] Landscape mode: controls in corners
+- [ ] Controls reposition on orientation change
