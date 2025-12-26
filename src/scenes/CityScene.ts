@@ -257,8 +257,8 @@ export class CityScene extends Phaser.Scene {
           fontFamily: 'Arial Black, Arial',
           fontStyle: 'bold',
           color: '#000000',
-          alpha: 0.5,
         }).setOrigin(0.5);
+        shadow.setAlpha(0.5);
         shadow.setAngle(-10);
         shadow.setScale(1.2, 0.8);
         shadow.setDepth(label.centerY + 149);
