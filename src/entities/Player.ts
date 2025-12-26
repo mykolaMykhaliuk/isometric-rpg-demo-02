@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { WeaponManager } from '../managers/WeaponManager';
 import { IWeapon, WeaponType } from '../weapons/IWeapon';
+import { ArmorType } from './Armor';
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
   private cursors: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -8,6 +9,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private speed: number = 150;
   private health: number = 100;
   private maxHealth: number = 100;
+  private armor: number = 0;
+  private maxArmor: number = 100;
+  private currentArmorType: ArmorType | null = null;
   private weaponManager: WeaponManager;
   private currentWeapon: IWeapon;
   private weaponSwitchCooldown: number = 0;
@@ -220,12 +224,35 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   takeDamage(amount: number): void {
-    this.health -= amount;
-    this.scene.events.emit('healthChanged', this.health, this.maxHealth);
+    let actualDamage = amount;
 
+    // Armor absorbs damage first
+    if (this.armor > 0) {
+      const armorAbsorption = Math.min(this.armor, amount);
+      this.armor -= armorAbsorption;
+      actualDamage = amount - armorAbsorption;
+      this.scene.events.emit('armorChanged', this.armor, this.maxArmor);
+
+      // Remove visual overlay if armor breaks
+      if (this.armor <= 0) {
+        this.removeArmorOverlay();
+      }
+    }
+
+    // Apply remaining damage to health
+    if (actualDamage > 0) {
+      this.health -= actualDamage;
+      this.scene.events.emit('healthChanged', this.health, this.maxHealth);
+    }
+
+    // Visual feedback (red tint)
     this.setTint(0xff0000);
     this.scene.time.delayedCall(100, () => {
       this.clearTint();
+      // Reapply armor tint if armor is still active
+      if (this.armor > 0 && this.currentArmorType) {
+        this.addArmorOverlay(this.currentArmorType);
+      }
     });
 
     if (this.health <= 0) {
@@ -254,6 +281,45 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
   }
 
+  addArmor(amount: number, armorType: ArmorType): void {
+    // Add armor and update max armor if needed
+    this.armor = Math.min(this.armor + amount, this.maxArmor);
+    this.currentArmorType = armorType;
+
+    // Set max armor based on type
+    if (armorType === 'red' && this.maxArmor < 100) {
+      this.maxArmor = 100;
+    } else if (armorType === 'blue' && this.maxArmor < 50) {
+      this.maxArmor = 50;
+    }
+
+    // Add visual overlay
+    this.addArmorOverlay(armorType);
+
+    // Emit armor changed event
+    this.scene.events.emit('armorChanged', this.armor, this.maxArmor);
+  }
+
+  setArmor(amount: number): void {
+    this.armor = Math.min(amount, this.maxArmor);
+    if (this.armor > 0 && this.currentArmorType) {
+      this.addArmorOverlay(this.currentArmorType);
+    }
+    this.scene.events.emit('armorChanged', this.armor, this.maxArmor);
+  }
+
+  private addArmorOverlay(armorType: ArmorType): void {
+    // Apply colored tint based on armor type
+    const armorColor = armorType === 'blue' ? 0x4488ff : 0xff4444;
+    this.setTint(armorColor);
+  }
+
+  private removeArmorOverlay(): void {
+    // Clear armor tint
+    this.clearTint();
+    this.currentArmorType = null;
+  }
+
   getHealth(): number {
     return this.health;
   }
@@ -272,6 +338,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     return gun ? gun.getMaxAmmo() : 30;
   }
 
+  getArmor(): number {
+    return this.armor;
+  }
+
+  getMaxArmor(): number {
+    return this.maxArmor;
+  }
+
   getCurrentWeaponType(): WeaponType {
     return this.currentWeapon.getWeaponType();
   }
@@ -282,10 +356,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   resetStats(): void {
     this.health = this.maxHealth;
+    this.armor = 0;
+    this.currentArmorType = null;
+    this.removeArmorOverlay();
     const gun = this.weaponManager.getWeapon(WeaponType.GUN);
     if (gun) {
       gun.setAmmo(gun.getMaxAmmo());
     }
     this.scene.events.emit('healthChanged', this.health, this.maxHealth);
+    this.scene.events.emit('armorChanged', this.armor, this.maxArmor);
   }
 }

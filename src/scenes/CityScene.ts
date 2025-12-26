@@ -23,6 +23,7 @@ interface CitySceneData {
   fromBuildingId?: number;
   playerHealth?: number;
   playerAmmo?: number;
+  playerArmor?: number;
   currentWeapon?: WeaponType;
 }
 
@@ -48,6 +49,7 @@ export class CityScene extends Phaser.Scene {
   private fromBuildingId?: number;
   private initialHealth?: number;
   private initialAmmo?: number;
+  private initialArmor?: number;
   private initialWeapon?: WeaponType;
 
   // Building labels for the four central buildings
@@ -114,6 +116,7 @@ export class CityScene extends Phaser.Scene {
     this.fromBuildingId = data?.fromBuildingId;
     this.initialHealth = data?.playerHealth;
     this.initialAmmo = data?.playerAmmo;
+    this.initialArmor = data?.playerArmor;
     this.initialWeapon = data?.currentWeapon;
   }
 
@@ -331,6 +334,9 @@ export class CityScene extends Phaser.Scene {
     }
     if (this.initialAmmo !== undefined) {
       this.player.setAmmo(this.initialAmmo);
+    }
+    if (this.initialArmor !== undefined) {
+      this.player.setArmor(this.initialArmor);
     }
     if (this.initialWeapon !== undefined) {
       this.player.setWeapon(this.initialWeapon);
@@ -620,6 +626,7 @@ export class CityScene extends Phaser.Scene {
       buildingId,
       playerHealth: this.player.getHealth(),
       playerAmmo: this.player.getAmmo(),
+      playerArmor: this.player.getArmor(),
       currentWeapon: this.player.getCurrentWeaponType(),
       isPortfolio: door?.isPortfolio ?? false,
     });

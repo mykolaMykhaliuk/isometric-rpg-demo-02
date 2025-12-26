@@ -18,6 +18,7 @@ export class BootScene extends Phaser.Scene {
     this.createBulletSprite();
     this.createDoorSprite();
     this.createAmmoSprite();
+    this.createArmorSprites();
     this.createWeaponIcons();
     this.createSwordSprite();
 
@@ -847,6 +848,64 @@ export class BootScene extends Phaser.Scene {
 
     graphics.generateTexture('ammo', 16, 12);
     graphics.destroy();
+  }
+
+  private createArmorSprites(): void {
+    // Blue Armor (32x32)
+    const blueArmor = this.make.graphics({ x: 0, y: 0 });
+
+    // Shield shape base
+    blueArmor.fillStyle(0x2255aa, 1);
+    blueArmor.fillRoundedRect(6, 4, 20, 24, 4);
+
+    // Shield border/frame
+    blueArmor.lineStyle(2, 0x4488ff, 1);
+    blueArmor.strokeRoundedRect(6, 4, 20, 24, 4);
+
+    // Inner highlight
+    blueArmor.fillStyle(0x5599ff, 0.6);
+    blueArmor.fillRoundedRect(9, 7, 14, 18, 3);
+
+    // Metallic sheen
+    blueArmor.fillStyle(0x88ccff, 0.4);
+    blueArmor.fillRoundedRect(10, 8, 6, 16, 2);
+
+    // Center emblem/design
+    blueArmor.fillStyle(0x1144aa, 1);
+    blueArmor.fillCircle(16, 16, 4);
+    blueArmor.fillStyle(0x66aaff, 0.8);
+    blueArmor.fillCircle(16, 16, 2);
+
+    blueArmor.generateTexture('armor_blue', 32, 32);
+    blueArmor.destroy();
+
+    // Red Armor (32x32)
+    const redArmor = this.make.graphics({ x: 0, y: 0 });
+
+    // Shield shape base
+    redArmor.fillStyle(0xaa2222, 1);
+    redArmor.fillRoundedRect(6, 4, 20, 24, 4);
+
+    // Shield border/frame
+    redArmor.lineStyle(2, 0xff4444, 1);
+    redArmor.strokeRoundedRect(6, 4, 20, 24, 4);
+
+    // Inner highlight
+    redArmor.fillStyle(0xff5555, 0.6);
+    redArmor.fillRoundedRect(9, 7, 14, 18, 3);
+
+    // Metallic sheen
+    redArmor.fillStyle(0xff8888, 0.4);
+    redArmor.fillRoundedRect(10, 8, 6, 16, 2);
+
+    // Center emblem/design
+    redArmor.fillStyle(0xaa1111, 1);
+    redArmor.fillCircle(16, 16, 4);
+    redArmor.fillStyle(0xff6666, 0.8);
+    redArmor.fillCircle(16, 16, 2);
+
+    redArmor.generateTexture('armor_red', 32, 32);
+    redArmor.destroy();
   }
 
   private createWeaponIcons(): void {

@@ -4,6 +4,8 @@ import { WeaponType } from '../weapons/IWeapon';
 export class UIScene extends Phaser.Scene {
   private healthBar!: Phaser.GameObjects.Graphics;
   private healthText!: Phaser.GameObjects.Text;
+  private armorBar!: Phaser.GameObjects.Graphics;
+  private armorText!: Phaser.GameObjects.Text;
   private ammoText!: Phaser.GameObjects.Text;
   private scoreText!: Phaser.GameObjects.Text;
   private weaponIcon!: Phaser.GameObjects.Image;
@@ -17,6 +19,7 @@ export class UIScene extends Phaser.Scene {
 
   create(): void {
     this.createHealthBar();
+    this.createArmorBar();
     this.createAmmoDisplay();
     this.createWeaponDisplay();
     this.createScoreDisplay();
@@ -75,9 +78,63 @@ export class UIScene extends Phaser.Scene {
     this.healthText?.setText(`${current}/${max}`);
   }
 
+  private createArmorBar(): void {
+    const x = 20;
+    const y = 40;
+
+    // Background
+    this.add.rectangle(x + 75, y + 10, 160, 18, 0x1a1a1a).setOrigin(0, 0.5);
+
+    // Armor bar
+    this.armorBar = this.add.graphics();
+    this.updateArmorBar(0, 100);
+
+    // Label
+    this.add.text(x, y, 'ARMOR', {
+      fontSize: '14px',
+      color: '#888888',
+    });
+
+    // Armor text
+    this.armorText = this.add.text(x + 155, y, '0/100', {
+      fontSize: '14px',
+      color: '#888888',
+    }).setOrigin(0.5, 0);
+  }
+
+  private updateArmorBar(current: number, max: number): void {
+    const x = 95;
+    const y = 44;
+    const width = 150;
+    const height = 12;
+    const percentage = current / max;
+
+    this.armorBar.clear();
+
+    // Background
+    this.armorBar.fillStyle(0x1a1a1a, 1);
+    this.armorBar.fillRect(x, y, width, height);
+
+    // Armor fill (color based on amount - blue for >50, red otherwise)
+    if (current > 0) {
+      const armorColor = current > 50 ? 0x4488ff : 0xff5555;
+      this.armorBar.fillStyle(armorColor, 1);
+      this.armorBar.fillRect(x + 2, y + 2, (width - 4) * percentage, height - 4);
+    }
+
+    // Border
+    this.armorBar.lineStyle(1, 0x888888, 0.8);
+    this.armorBar.strokeRect(x, y, width, height);
+
+    // Update text color based on armor amount
+    const textColor = current > 0 ? (current > 50 ? '#4488ff' : '#ff5555') : '#888888';
+    this.armorText?.setColor(textColor);
+    this.armorText?.setText(`${Math.ceil(current)}/${max}`);
+  }
+
   private createAmmoDisplay(): void {
     const x = 20;
-    const y = 50;
+    const y = 60;
 
     this.add.text(x, y, 'AMMO', {
       fontSize: '14px',
@@ -314,6 +371,10 @@ export class UIScene extends Phaser.Scene {
     [cityScene, buildingScene].forEach((gameScene) => {
       gameScene.events.on('healthChanged', (current: number, max: number) => {
         this.updateHealthBar(current, max);
+      });
+
+      gameScene.events.on('armorChanged', (current: number, max: number) => {
+        this.updateArmorBar(current, max);
       });
 
       gameScene.events.on('ammoChanged', (current: number, max: number, weaponType?: WeaponType) => {

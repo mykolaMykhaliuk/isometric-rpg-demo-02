@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { Player } from '../entities/Player';
 import { Enemy } from '../entities/Enemy';
 import { Ammo } from '../entities/Ammo';
+import { Armor, ArmorType } from '../entities/Armor';
 import { cartToIso } from '../utils/IsometricUtils';
 import { WeaponType } from '../weapons/IWeapon';
 import { getPortfolioForBuilding } from '../config/portfolioData';
@@ -10,6 +11,7 @@ interface BuildingData {
   buildingId: number;
   playerHealth: number;
   playerAmmo: number;
+  playerArmor?: number;
   currentWeapon?: WeaponType;
   isPortfolio?: boolean;
 }
@@ -18,10 +20,12 @@ export class BuildingScene extends Phaser.Scene {
   private player!: Player;
   private enemies!: Phaser.Physics.Arcade.Group;
   private ammoItems!: Phaser.Physics.Arcade.Group;
+  private armorItems!: Phaser.Physics.Arcade.Group;
   private buildingId: number = 0;
   private isPortfolioBuilding: boolean = false;
   private initialHealth: number = 100;
   private initialAmmo: number = 30;
+  private initialArmor: number = 0;
   private initialWeapon: WeaponType = WeaponType.GUN;
   private mapWidth: number = 20;
   private mapHeight: number = 16;
@@ -179,6 +183,7 @@ export class BuildingScene extends Phaser.Scene {
     this.isPortfolioBuilding = data.isPortfolio ?? false;
     this.initialHealth = data.playerHealth || 100;
     this.initialAmmo = data.playerAmmo || 30;
+    this.initialArmor = data.playerArmor || 0;
     this.initialWeapon = data.currentWeapon || WeaponType.GUN;
 
     // Set map dimensions based on building type
@@ -202,8 +207,10 @@ export class BuildingScene extends Phaser.Scene {
     this.createPlayer();
     this.createEnemyGroup();
     this.createAmmoGroup();
+    this.createArmorGroup();
     this.spawnInteriorEnemies();
     this.spawnAmmoItems();
+    this.spawnArmorItems();
     this.setupCamera();
     this.setupCollisions();
     this.setupEvents();
@@ -346,6 +353,7 @@ export class BuildingScene extends Phaser.Scene {
       this.player.takeDamage(100 - this.initialHealth);
     }
     this.player.setAmmo(this.initialAmmo);
+    this.player.setArmor(this.initialArmor);
 
     // Restore weapon state
     this.player.setWeapon(this.initialWeapon);
@@ -361,6 +369,13 @@ export class BuildingScene extends Phaser.Scene {
   private createAmmoGroup(): void {
     this.ammoItems = this.physics.add.group({
       classType: Ammo,
+      runChildUpdate: true,
+    });
+  }
+
+  private createArmorGroup(): void {
+    this.armorItems = this.physics.add.group({
+      classType: Armor,
       runChildUpdate: true,
     });
   }
@@ -393,6 +408,51 @@ export class BuildingScene extends Phaser.Scene {
         }
         attempts++;
       }
+    }
+  }
+
+  private spawnArmorItems(): void {
+    // Only spawn armor in portfolio buildings
+    if (!this.isPortfolioBuilding) {
+      return;
+    }
+
+    const currentMap = this.interiorMaps[this.buildingId];
+    let armorType: ArmorType;
+
+    // Building 0 (Skills) = Blue armor (50 HP)
+    // Building 2 (Experience) = Red armor (100 HP)
+    if (this.buildingId === 0) {
+      armorType = 'blue';
+    } else if (this.buildingId === 2) {
+      armorType = 'red';
+    } else {
+      return; // No armor in other buildings
+    }
+
+    // Find a floor tile near the center of the room
+    let attempts = 0;
+    const centerX = Math.floor(this.mapWidth / 2);
+    const centerY = Math.floor(this.mapHeight / 2);
+
+    while (attempts < 50) {
+      // Try to spawn near center with some randomness
+      const tileX = Phaser.Math.Between(centerX - 3, centerX + 3);
+      const tileY = Phaser.Math.Between(centerY - 2, centerY + 2);
+
+      if (tileX >= 0 && tileX < this.mapWidth && tileY >= 0 && tileY < this.mapHeight) {
+        if (currentMap[tileY][tileX] === 0) {
+          const isoPos = cartToIso(tileX, tileY);
+          const spawnX = isoPos.x + this.offsetX;
+          const spawnY = isoPos.y + this.offsetY;
+
+          const armor = new Armor(this, spawnX, spawnY, armorType);
+          armor.setPlayer(this.player);
+          this.armorItems.add(armor);
+          break;
+        }
+      }
+      attempts++;
     }
   }
 
@@ -643,6 +703,7 @@ export class BuildingScene extends Phaser.Scene {
         fromBuildingId: this.buildingId,
         playerHealth: this.player.getHealth(),
         playerAmmo: this.player.getAmmo(),
+        playerArmor: this.player.getArmor(),
         currentWeapon: this.player.getCurrentWeaponType(),
       });
     }
