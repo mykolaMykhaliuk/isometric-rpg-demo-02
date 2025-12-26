@@ -1,0 +1,11 @@
+{
+  "hosting": {
+    "site": "mm-dev-game",
+    "public": "dist",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  }
+}
