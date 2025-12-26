@@ -3,6 +3,7 @@ import { BootScene } from './scenes/BootScene';
 import { CityScene } from './scenes/CityScene';
 import { BuildingScene } from './scenes/BuildingScene';
 import { UIScene } from './scenes/UIScene';
+import { ConversationScene } from './scenes/ConversationScene';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -17,7 +18,10 @@ const config: Phaser.Types.Core.GameConfig = {
       debug: false,
     },
   },
-  scene: [BootScene, CityScene, BuildingScene, UIScene],
+  scene: [BootScene, CityScene, BuildingScene, UIScene, ConversationScene],
+  dom: {
+    createContainer: true,
+  },
   pixelArt: false,
   antialias: true,
 };

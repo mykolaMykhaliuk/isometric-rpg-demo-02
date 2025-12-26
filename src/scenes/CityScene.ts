@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { Player } from '../entities/Player';
 import { Enemy } from '../entities/Enemy';
+import { Wizard } from '../entities/Wizard';
 import { Ammo } from '../entities/Ammo';
 import { cartToIso, isoToCart } from '../utils/IsometricUtils';
 import { WeaponType } from '../weapons/IWeapon';
@@ -26,6 +27,7 @@ interface CitySceneData {
 
 export class CityScene extends Phaser.Scene {
   private player!: Player;
+  private wizard!: Wizard;
   private enemies!: Phaser.Physics.Arcade.Group;
   private ammoItems!: Phaser.Physics.Arcade.Group;
   private doors: DoorData[] = [];
@@ -49,7 +51,7 @@ export class CityScene extends Phaser.Scene {
 
   // Building labels for the four central buildings
   private buildingLabels: BuildingLabel[] = [
-    { text: 'EDUCATION', centerX: 13.5, centerY: 13 },
+    { text: 'SKILLS', centerX: 13.5, centerY: 13 },
     { text: 'PROJECTS', centerX: 24.5, centerY: 13 },
     { text: 'FUTURE', centerX: 13.5, centerY: 25 },
     { text: 'CONTACTS', centerX: 24.5, centerY: 25 },
@@ -114,6 +116,7 @@ export class CityScene extends Phaser.Scene {
   create(): void {
     this.createMap();
     this.createPlayer();
+    this.createWizard();
     this.createEnemyGroup();
     this.createAmmoGroup();
     this.spawnInitialEnemies();
@@ -324,6 +327,16 @@ export class CityScene extends Phaser.Scene {
     if (this.initialWeapon !== undefined) {
       this.player.setWeapon(this.initialWeapon);
     }
+  }
+
+  private createWizard(): void {
+    // Place wizard near spawn location (tile 7, 5)
+    const wizardTile = cartToIso(7, 5);
+    const wizardX = wizardTile.x + this.offsetX;
+    const wizardY = wizardTile.y + this.offsetY;
+
+    this.wizard = new Wizard(this, wizardX, wizardY);
+    this.wizard.setPlayer(this.player);
   }
 
   private createEnemyGroup(): void {
@@ -639,6 +652,7 @@ export class CityScene extends Phaser.Scene {
 
   update(time: number, delta: number): void {
     this.player.update(time, delta);
+    this.wizard.update(time, delta);
 
     // Update obstruction transparency based on player position
     this.updateObstructionTransparency();

@@ -2,7 +2,13 @@
   "permissions": {
     "allow": [
       "Bash(npm run build:*)",
-      "Bash(npm run dev:*)"
+      "Bash(npm run dev:*)",
+      "WebFetch(domain:localhost)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(tasklist:*)",
+      "Bash(curl:*)",
+      "Bash(taskkill:*)"
     ]
   }
 }

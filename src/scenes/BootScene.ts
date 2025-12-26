@@ -14,6 +14,7 @@ export class BootScene extends Phaser.Scene {
     this.createIsometricTiles();
     this.createPlayerSprite();
     this.createEnemySprite();
+    this.createWizardSprite();
     this.createBulletSprite();
     this.createDoorSprite();
     this.createAmmoSprite();
@@ -22,6 +23,7 @@ export class BootScene extends Phaser.Scene {
 
     this.scene.start('CityScene');
     this.scene.launch('UIScene');
+    this.scene.launch('ConversationScene');
   }
 
   private createLoadingBar(): void {
@@ -608,6 +610,98 @@ export class BootScene extends Phaser.Scene {
     graphics.fillEllipse(16, 10, 20, 8);
 
     graphics.generateTexture('enemy_bug', 32, 32);
+    graphics.destroy();
+  }
+
+  private createWizardSprite(): void {
+    const graphics = this.make.graphics({ x: 0, y: 0 });
+
+    // Wizard robe (body) with gradient
+    graphics.fillStyle(0x5533aa, 1);
+    graphics.fillEllipse(16, 22, 18, 20);
+
+    // Robe highlight
+    graphics.fillStyle(0x6644bb, 0.7);
+    graphics.fillEllipse(14, 20, 12, 14);
+
+    // Robe shadow
+    graphics.fillStyle(0x4422aa, 0.8);
+    graphics.fillEllipse(18, 24, 12, 14);
+
+    // Belt
+    graphics.fillStyle(0x8b6914, 1);
+    graphics.fillRect(10, 18, 12, 2);
+
+    // Belt buckle
+    graphics.fillStyle(0xffd700, 1);
+    graphics.fillRect(14, 17, 4, 4);
+    graphics.fillStyle(0xffee88, 0.6);
+    graphics.fillRect(14, 17, 2, 2);
+
+    // Sleeves
+    graphics.fillStyle(0x5533aa, 1);
+    graphics.fillCircle(8, 18, 4);
+    graphics.fillCircle(24, 18, 4);
+
+    // Hands
+    graphics.fillStyle(0xffdd99, 1);
+    graphics.fillCircle(6, 20, 3);
+    graphics.fillCircle(26, 20, 3);
+
+    // Staff (left hand)
+    graphics.lineStyle(3, 0x8b6914, 1);
+    graphics.lineBetween(4, 22, 4, 6);
+
+    // Staff orb
+    graphics.fillStyle(0x4488ff, 1);
+    graphics.fillCircle(4, 4, 5);
+    graphics.fillStyle(0x66aaff, 0.8);
+    graphics.fillCircle(3, 3, 3);
+    graphics.fillStyle(0xffffff, 1);
+    graphics.fillCircle(3, 3, 1);
+
+    // Head with shading
+    graphics.fillStyle(0xffdd99, 1);
+    graphics.fillCircle(16, 12, 6);
+
+    // Head highlight
+    graphics.fillStyle(0xffeeaa, 0.8);
+    graphics.fillCircle(15, 11, 3);
+
+    // Eyes
+    graphics.fillStyle(0x000000, 1);
+    graphics.fillCircle(14, 11, 1);
+    graphics.fillCircle(18, 11, 1);
+
+    // Eye shine
+    graphics.fillStyle(0xffffff, 1);
+    graphics.fillCircle(14, 10, 0.5);
+    graphics.fillCircle(18, 10, 0.5);
+
+    // Beard
+    graphics.fillStyle(0xcccccc, 1);
+    graphics.fillEllipse(16, 15, 8, 5);
+    graphics.fillStyle(0xeeeeee, 0.6);
+    graphics.fillEllipse(15, 14, 5, 3);
+
+    // Wizard hat
+    graphics.fillStyle(0x5533aa, 1);
+    graphics.fillTriangle(16, 0, 10, 8, 22, 8);
+
+    // Hat brim
+    graphics.fillStyle(0x6644bb, 1);
+    graphics.fillEllipse(16, 8, 14, 4);
+
+    // Hat highlight
+    graphics.fillStyle(0x7755cc, 0.6);
+    graphics.fillTriangle(16, 0, 13, 4, 16, 6);
+
+    // Hat stars
+    graphics.fillStyle(0xffff00, 1);
+    graphics.fillCircle(14, 4, 1);
+    graphics.fillCircle(18, 6, 1);
+
+    graphics.generateTexture('wizard', 32, 32);
     graphics.destroy();
   }
 
