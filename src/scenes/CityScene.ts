@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { Player } from '../entities/Player';
 import { Enemy } from '../entities/Enemy';
 import { Ammo } from '../entities/Ammo';
-import { cartToIso } from '../utils/IsometricUtils';
+import { cartToIso, isoToCart } from '../utils/IsometricUtils';
 import { WeaponType } from '../weapons/IWeapon';
 
 interface DoorData {
@@ -30,6 +30,7 @@ export class CityScene extends Phaser.Scene {
   private ammoItems!: Phaser.Physics.Arcade.Group;
   private doors: DoorData[] = [];
   private buildingBodies!: Phaser.Physics.Arcade.StaticGroup;
+  private obstructions: Array<{ sprite: Phaser.GameObjects.Image, tileX: number, tileY: number }> = [];
   private mapWidth: number = 40;
   private mapHeight: number = 40;
   private offsetX: number = 512;
@@ -173,7 +174,10 @@ export class CityScene extends Phaser.Scene {
         if (tileType === 2) {
           const building = this.add.image(screenX, screenY - 30, 'tile_building');
           building.setOrigin(0.5, 0.5);
-          building.setDepth(y + 100);
+          building.setDepth(screenY);
+
+          // Store reference for transparency system
+          this.obstructions.push({ sprite: building, tileX: x, tileY: y });
 
           // Add collision body for building
           const buildingBody = this.add.rectangle(screenX, screenY, 50, 30, 0x000000, 0);
@@ -183,7 +187,10 @@ export class CityScene extends Phaser.Scene {
           // Render fence with proper offset
           const fence = this.add.image(screenX, screenY - 10, 'tile_fence');
           fence.setOrigin(0.5, 0.5);
-          fence.setDepth(y + 50);
+          fence.setDepth(screenY);
+
+          // Store reference for transparency system
+          this.obstructions.push({ sprite: fence, tileX: x, tileY: y });
 
           // Add collision body for fence
           const fenceBody = this.add.rectangle(screenX, screenY, 50, 30, 0x000000, 0);
@@ -569,8 +576,34 @@ export class CityScene extends Phaser.Scene {
     this.spawnDelay = Math.max(this.baseSpawnDelay - difficultyLevel * 400, 1000);
   }
 
+  private updateObstructionTransparency(): void {
+    // Convert player screen position to tile coordinates (subtract offset first)
+    const playerTilePos = isoToCart(this.player.x - this.offsetX, this.player.y - this.offsetY);
+
+    this.obstructions.forEach(obstruction => {
+      // Player is "behind" obstruction if:
+      // 1. Player's tile Y is greater than obstruction's tile Y (further back in iso space)
+      // 2. Player is horizontally close to the obstruction (within X tiles)
+
+      const isPlayerBehind =
+        playerTilePos.y > obstruction.tileY - 3  &&
+        Math.abs(playerTilePos.x - obstruction.tileX) <= 4 &&
+        obstruction.tileY >= playerTilePos.y &&
+        obstruction.tileX >= playerTilePos.x;
+
+      // Set transparency: 0.3 when behind, 1.0 when not
+      const targetAlpha = isPlayerBehind ? 0.3 : 1.0;
+
+      // Smooth transition
+      obstruction.sprite.alpha = Phaser.Math.Linear(obstruction.sprite.alpha, targetAlpha, 0.1);
+    });
+  }
+
   update(time: number, delta: number): void {
     this.player.update(time, delta);
+
+    // Update obstruction transparency based on player position
+    this.updateObstructionTransparency();
 
     // Spawn enemies periodically
     if (time > this.spawnTimer) {
