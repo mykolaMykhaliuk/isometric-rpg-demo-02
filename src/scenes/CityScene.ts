@@ -3,6 +3,7 @@ import { Player } from '../entities/Player';
 import { Enemy } from '../entities/Enemy';
 import { Ammo } from '../entities/Ammo';
 import { cartToIso } from '../utils/IsometricUtils';
+import { WeaponType } from '../weapons/IWeapon';
 
 interface DoorData {
   tileX: number;
@@ -14,6 +15,13 @@ interface BuildingLabel {
   text: string;
   centerX: number;
   centerY: number;
+}
+
+interface CitySceneData {
+  fromBuildingId?: number;
+  playerHealth?: number;
+  playerAmmo?: number;
+  currentWeapon?: WeaponType;
 }
 
 export class CityScene extends Phaser.Scene {
@@ -31,6 +39,12 @@ export class CityScene extends Phaser.Scene {
   private baseSpawnDelay: number = 5000;
   private maxEnemies: number = 10;
   private baseMaxEnemies: number = 10;
+
+  // Data passed from BuildingScene when returning
+  private fromBuildingId?: number;
+  private initialHealth?: number;
+  private initialAmmo?: number;
+  private initialWeapon?: WeaponType;
 
   // Building labels for the four central buildings
   private buildingLabels: BuildingLabel[] = [
@@ -87,6 +101,13 @@ export class CityScene extends Phaser.Scene {
 
   constructor() {
     super({ key: 'CityScene' });
+  }
+
+  init(data?: CitySceneData): void {
+    this.fromBuildingId = data?.fromBuildingId;
+    this.initialHealth = data?.playerHealth;
+    this.initialAmmo = data?.playerAmmo;
+    this.initialWeapon = data?.currentWeapon;
   }
 
   create(): void {
@@ -267,12 +288,35 @@ export class CityScene extends Phaser.Scene {
   }
 
   private createPlayer(): void {
-    // Start player on a road tile
-    const startTile = cartToIso(9, 5);
-    const startX = startTile.x + this.offsetX;
-    const startY = startTile.y + this.offsetY;
+    let startX: number;
+    let startY: number;
+
+    // Check if returning from a building
+    if (this.fromBuildingId !== undefined && this.doors[this.fromBuildingId]) {
+      // Spawn at the door the player entered from
+      const door = this.doors[this.fromBuildingId];
+      const doorIso = cartToIso(door.tileX, door.tileY);
+      startX = doorIso.x + this.offsetX;
+      startY = doorIso.y + this.offsetY;
+    } else {
+      // Default starting position
+      const startTile = cartToIso(9, 5);
+      startX = startTile.x + this.offsetX;
+      startY = startTile.y + this.offsetY;
+    }
 
     this.player = new Player(this, startX, startY);
+
+    // Restore player stats if returning from a building
+    if (this.initialHealth !== undefined && this.initialHealth < 100) {
+      this.player.takeDamage(100 - this.initialHealth);
+    }
+    if (this.initialAmmo !== undefined) {
+      this.player.setAmmo(this.initialAmmo);
+    }
+    if (this.initialWeapon !== undefined) {
+      this.player.setWeapon(this.initialWeapon);
+    }
   }
 
   private createEnemyGroup(): void {

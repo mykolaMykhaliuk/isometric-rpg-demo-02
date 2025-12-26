@@ -351,7 +351,12 @@ export class BuildingScene extends Phaser.Scene {
     );
 
     if (distance < 40) {
-      this.scene.start('CityScene');
+      this.scene.start('CityScene', {
+        fromBuildingId: this.buildingId,
+        playerHealth: this.player.getHealth(),
+        playerAmmo: this.player.getAmmo(),
+        currentWeapon: this.player.getCurrentWeaponType(),
+      });
     }
   }
 
