@@ -202,12 +202,12 @@ export class CityScene extends Phaser.Scene {
 
           // Add door indicator with glow effect
           const doorIndicator = this.add.circle(screenX, screenY, 10, 0xffff00, 0.7);
-          doorIndicator.setDepth(y + 150);
+          doorIndicator.setDepth(screenY + 150);
 
           // Outer glow
           const doorGlow = this.add.circle(screenX, screenY, 12, 0xffff00, 0.3);
-          doorGlow.setDepth(y + 149);
-          
+          doorGlow.setDepth(screenY + 149);
+
           // Pulsing animation
           this.tweens.add({
             targets: [doorIndicator, doorGlow],
@@ -229,8 +229,8 @@ export class CityScene extends Phaser.Scene {
             stroke: '#ffff00',
             strokeThickness: 2,
           }).setOrigin(0.5);
-          hint.setDepth(y + 151);
-          
+          hint.setDepth(screenY + 151);
+
           // Hint glow
           this.tweens.add({
             targets: hint,
@@ -277,7 +277,7 @@ export class CityScene extends Phaser.Scene {
         // Apply slight rotation and scale for isometric effect
         text.setAngle(-10);
         text.setScale(1.2, 0.8);
-        text.setDepth(label.centerY + 150);
+        text.setDepth(screenY + 150);
 
         // Add shadow effect
         const shadow = this.add.text(letterX + 2, letterY + 2, letter, {
@@ -289,7 +289,7 @@ export class CityScene extends Phaser.Scene {
         shadow.setAlpha(0.5);
         shadow.setAngle(-10);
         shadow.setScale(1.2, 0.8);
-        shadow.setDepth(label.centerY + 149);
+        shadow.setDepth(screenY + 149);
       }
     }
   }
