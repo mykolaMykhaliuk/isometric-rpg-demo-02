@@ -19,6 +19,7 @@ export class BootScene extends Phaser.Scene {
     this.createDoorSprite();
     this.createAmmoSprite();
     this.createArmorSprites();
+    this.createHealthSprites();
     this.createWeaponIcons();
     this.createSwordSprite();
 
@@ -878,34 +879,43 @@ export class BootScene extends Phaser.Scene {
 
     blueArmor.generateTexture('armor_blue', 32, 32);
     blueArmor.destroy();
+  }
 
-    // Red Armor (32x32)
-    const redArmor = this.make.graphics({ x: 0, y: 0 });
+  private createHealthSprites(): void {
+    // Red Heart (28x28)
+    const redHeart = this.make.graphics({ x: 0, y: 0 });
 
-    // Shield shape base
-    redArmor.fillStyle(0xaa2222, 1);
-    redArmor.fillRoundedRect(6, 4, 20, 24, 4);
+    // Heart shape using two circles and triangle
+    // Left lobe
+    redHeart.fillStyle(0xff0044, 1);
+    redHeart.fillCircle(10, 10, 6);
+    // Right lobe
+    redHeart.fillCircle(18, 10, 6);
+    // Bottom point (triangle)
+    redHeart.beginPath();
+    redHeart.moveTo(4, 10);
+    redHeart.lineTo(24, 10);
+    redHeart.lineTo(14, 22);
+    redHeart.closePath();
+    redHeart.fillPath();
 
-    // Shield border/frame
-    redArmor.lineStyle(2, 0xff4444, 1);
-    redArmor.strokeRoundedRect(6, 4, 20, 24, 4);
+    // Highlight on left lobe
+    redHeart.fillStyle(0xff6688, 0.7);
+    redHeart.fillCircle(9, 8, 3);
 
-    // Inner highlight
-    redArmor.fillStyle(0xff5555, 0.6);
-    redArmor.fillRoundedRect(9, 7, 14, 18, 3);
+    // Outline for definition
+    redHeart.lineStyle(1.5, 0xcc0033, 1);
+    redHeart.strokeCircle(10, 10, 6);
+    redHeart.strokeCircle(18, 10, 6);
+    redHeart.beginPath();
+    redHeart.moveTo(4, 10);
+    redHeart.lineTo(24, 10);
+    redHeart.lineTo(14, 22);
+    redHeart.closePath();
+    redHeart.strokePath();
 
-    // Metallic sheen
-    redArmor.fillStyle(0xff8888, 0.4);
-    redArmor.fillRoundedRect(10, 8, 6, 16, 2);
-
-    // Center emblem/design
-    redArmor.fillStyle(0xaa1111, 1);
-    redArmor.fillCircle(16, 16, 4);
-    redArmor.fillStyle(0xff6666, 0.8);
-    redArmor.fillCircle(16, 16, 2);
-
-    redArmor.generateTexture('armor_red', 32, 32);
-    redArmor.destroy();
+    redHeart.generateTexture('heart_red', 28, 28);
+    redHeart.destroy();
   }
 
   private createWeaponIcons(): void {

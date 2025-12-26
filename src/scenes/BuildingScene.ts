@@ -3,6 +3,7 @@ import { Player } from '../entities/Player';
 import { Enemy } from '../entities/Enemy';
 import { Ammo } from '../entities/Ammo';
 import { Armor, ArmorType } from '../entities/Armor';
+import { Health } from '../entities/Health';
 import { cartToIso } from '../utils/IsometricUtils';
 import { WeaponType } from '../weapons/IWeapon';
 import { getPortfolioForBuilding } from '../config/portfolioData';
@@ -21,6 +22,7 @@ export class BuildingScene extends Phaser.Scene {
   private enemies!: Phaser.Physics.Arcade.Group;
   private ammoItems!: Phaser.Physics.Arcade.Group;
   private armorItems!: Phaser.Physics.Arcade.Group;
+  private healthItems!: Phaser.Physics.Arcade.Group;
   private buildingId: number = 0;
   private isPortfolioBuilding: boolean = false;
   private initialHealth: number = 100;
@@ -208,9 +210,11 @@ export class BuildingScene extends Phaser.Scene {
     this.createEnemyGroup();
     this.createAmmoGroup();
     this.createArmorGroup();
+    this.createHealthGroup();
     this.spawnInteriorEnemies();
     this.spawnAmmoItems();
     this.spawnArmorItems();
+    this.spawnHealthItems();
     this.setupCamera();
     this.setupCollisions();
     this.setupEvents();
@@ -380,6 +384,13 @@ export class BuildingScene extends Phaser.Scene {
     });
   }
 
+  private createHealthGroup(): void {
+    this.healthItems = this.physics.add.group({
+      classType: Health,
+      runChildUpdate: true,
+    });
+  }
+
   private spawnAmmoItems(): void {
     // Only spawn ammo in battle buildings
     if (this.isPortfolioBuilding) {
@@ -412,23 +423,12 @@ export class BuildingScene extends Phaser.Scene {
   }
 
   private spawnArmorItems(): void {
-    // Only spawn armor in portfolio buildings
-    if (!this.isPortfolioBuilding) {
+    // Only spawn blue armor in Building 0 (Skills)
+    if (!this.isPortfolioBuilding || this.buildingId !== 0) {
       return;
     }
 
     const currentMap = this.interiorMaps[this.buildingId];
-    let armorType: ArmorType;
-
-    // Building 0 (Skills) = Blue armor (50 HP)
-    // Building 2 (Experience) = Red armor (100 HP)
-    if (this.buildingId === 0) {
-      armorType = 'blue';
-    } else if (this.buildingId === 2) {
-      armorType = 'red';
-    } else {
-      return; // No armor in other buildings
-    }
 
     // Find a floor tile near the center of the room
     let attempts = 0;
@@ -446,13 +446,46 @@ export class BuildingScene extends Phaser.Scene {
           const spawnX = isoPos.x + this.offsetX;
           const spawnY = isoPos.y + this.offsetY;
 
-          const armor = new Armor(this, spawnX, spawnY, armorType);
+          const armor = new Armor(this, spawnX, spawnY, 'blue');
           armor.setPlayer(this.player);
           this.armorItems.add(armor);
           break;
         }
       }
       attempts++;
+    }
+  }
+
+  private spawnHealthItems(): void {
+    // Only spawn hearts in Contact building (buildingId 3)
+    if (this.buildingId !== 3) {
+      return;
+    }
+
+    const currentMap = this.interiorMaps[this.buildingId];
+
+    // Usually spawn 1 heart, very rarely (10% chance) spawn 2 hearts
+    const numHearts = Math.random() < 0.1 ? 2 : 1;
+
+    for (let i = 0; i < numHearts; i++) {
+      let attempts = 0;
+
+      while (attempts < 30) {
+        const tileX = Phaser.Math.Between(2, this.mapWidth - 3);
+        const tileY = Phaser.Math.Between(2, this.mapHeight - 3);
+
+        if (currentMap[tileY][tileX] === 0) {
+          const isoPos = cartToIso(tileX, tileY);
+          const spawnX = isoPos.x + this.offsetX;
+          const spawnY = isoPos.y + this.offsetY;
+
+          const health = new Health(this, spawnX, spawnY);
+          health.setPlayer(this.player);
+          this.healthItems.add(health);
+          break;
+        }
+        attempts++;
+      }
     }
   }
 
