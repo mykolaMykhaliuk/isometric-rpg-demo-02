@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { Player } from '../entities/Player';
 import { Enemy } from '../entities/Enemy';
+import { Ammo } from '../entities/Ammo';
 import { cartToIso } from '../utils/IsometricUtils';
 import { WeaponType } from '../weapons/IWeapon';
 import { getPortfolioForBuilding } from '../config/portfolioData';
@@ -16,6 +17,7 @@ interface BuildingData {
 export class BuildingScene extends Phaser.Scene {
   private player!: Player;
   private enemies!: Phaser.Physics.Arcade.Group;
+  private ammoItems!: Phaser.Physics.Arcade.Group;
   private buildingId: number = 0;
   private isPortfolioBuilding: boolean = false;
   private initialHealth: number = 100;
@@ -25,6 +27,11 @@ export class BuildingScene extends Phaser.Scene {
   private mapHeight: number = 16;
   private offsetX: number = 400;
   private offsetY: number = 100;
+
+  // Battle arena settings
+  private enemySpawnTimer: number = 0;
+  private enemySpawnDelay: number = 3000;
+  private maxEnemies: number = 15;
 
   // Interior map: 0 = floor, 1 = wall, 2 = exit door
   private interiorMaps: number[][][] = [
@@ -123,6 +130,40 @@ export class BuildingScene extends Phaser.Scene {
       [1, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
       [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
     ],
+    // Building 5 - Battle Arena (HUGE 40x30 combat zone with walls)
+    [
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1],
+      [1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+      [1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+      [1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1],
+      [1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+      [1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+      [1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    ],
   ];
 
   private exitPosition: { x: number; y: number } = { x: 0, y: 0 };
@@ -139,13 +180,30 @@ export class BuildingScene extends Phaser.Scene {
     this.initialHealth = data.playerHealth || 100;
     this.initialAmmo = data.playerAmmo || 30;
     this.initialWeapon = data.currentWeapon || WeaponType.GUN;
+
+    // Set map dimensions based on building type
+    if (!this.isPortfolioBuilding) {
+      // Battle arena is larger
+      this.mapWidth = 40;
+      this.mapHeight = 30;
+      this.offsetX = 300;
+      this.offsetY = 50;
+    } else {
+      // Portfolio buildings are standard size
+      this.mapWidth = 20;
+      this.mapHeight = 16;
+      this.offsetX = 400;
+      this.offsetY = 100;
+    }
   }
 
   create(): void {
     this.createInterior();
     this.createPlayer();
     this.createEnemyGroup();
+    this.createAmmoGroup();
     this.spawnInteriorEnemies();
+    this.spawnAmmoItems();
     this.setupCamera();
     this.setupCollisions();
     this.setupEvents();
@@ -266,10 +324,20 @@ export class BuildingScene extends Phaser.Scene {
   }
 
   private createPlayer(): void {
-    // Start near center (adjusted for larger building)
-    const startTile = cartToIso(10, 8);
-    const startX = startTile.x + this.offsetX;
-    const startY = startTile.y + this.offsetY;
+    // Start position depends on building type
+    let startX: number, startY: number;
+
+    if (!this.isPortfolioBuilding) {
+      // Battle arena - spawn at center
+      const startTile = cartToIso(20, 15);
+      startX = startTile.x + this.offsetX;
+      startY = startTile.y + this.offsetY;
+    } else {
+      // Portfolio building - standard spawn
+      const startTile = cartToIso(10, 8);
+      startX = startTile.x + this.offsetX;
+      startY = startTile.y + this.offsetY;
+    }
 
     this.player = new Player(this, startX, startY);
 
@@ -290,21 +358,26 @@ export class BuildingScene extends Phaser.Scene {
     });
   }
 
-  private spawnInteriorEnemies(): void {
-    // Portfolio buildings are enemy-free showcase spaces
-    // Battle buildings have normal enemy spawning
+  private createAmmoGroup(): void {
+    this.ammoItems = this.physics.add.group({
+      classType: Ammo,
+      runChildUpdate: true,
+    });
+  }
+
+  private spawnAmmoItems(): void {
+    // Only spawn ammo in battle buildings
     if (this.isPortfolioBuilding) {
-      // No enemies in portfolio buildings
       return;
     }
 
-    // Normal enemy spawning for non-portfolio buildings
     const currentMap = this.interiorMaps[this.buildingId];
-    const numEnemies = Phaser.Math.Between(4, 8);
+    // Spawn 10-15 ammo pickups across the battle arena
+    const numAmmo = Phaser.Math.Between(10, 15);
 
-    for (let i = 0; i < numEnemies; i++) {
+    for (let i = 0; i < numAmmo; i++) {
       let attempts = 0;
-      while (attempts < 20) {
+      while (attempts < 30) {
         const tileX = Phaser.Math.Between(2, this.mapWidth - 3);
         const tileY = Phaser.Math.Between(2, this.mapHeight - 3);
 
@@ -313,22 +386,71 @@ export class BuildingScene extends Phaser.Scene {
           const spawnX = isoPos.x + this.offsetX;
           const spawnY = isoPos.y + this.offsetY;
 
-          const distToPlayer = Phaser.Math.Distance.Between(spawnX, spawnY, this.player.x, this.player.y);
-          if (distToPlayer > 100) {
-            const enemy = new Enemy(this, spawnX, spawnY);
-            enemy.setPlayer(this.player);
-            this.enemies.add(enemy);
-            break;
-          }
+          const ammo = new Ammo(this, spawnX, spawnY);
+          ammo.setPlayer(this.player);
+          this.ammoItems.add(ammo);
+          break;
         }
         attempts++;
       }
     }
   }
 
+  private spawnInteriorEnemies(): void {
+    // Portfolio buildings are enemy-free showcase spaces
+    // Battle buildings have normal enemy spawning
+    if (this.isPortfolioBuilding) {
+      // No enemies in portfolio buildings
+      return;
+    }
+
+    // Initial enemy spawning for battle buildings
+    const numEnemies = Phaser.Math.Between(8, 12);
+
+    for (let i = 0; i < numEnemies; i++) {
+      this.spawnSingleEnemy();
+    }
+  }
+
+  private spawnSingleEnemy(): void {
+    // Don't spawn in portfolio buildings or if at max capacity
+    if (this.isPortfolioBuilding || this.enemies.getLength() >= this.maxEnemies) {
+      return;
+    }
+
+    const currentMap = this.interiorMaps[this.buildingId];
+    let attempts = 0;
+
+    while (attempts < 30) {
+      const tileX = Phaser.Math.Between(2, this.mapWidth - 3);
+      const tileY = Phaser.Math.Between(2, this.mapHeight - 3);
+
+      if (currentMap[tileY][tileX] === 0) {
+        const isoPos = cartToIso(tileX, tileY);
+        const spawnX = isoPos.x + this.offsetX;
+        const spawnY = isoPos.y + this.offsetY;
+
+        const distToPlayer = Phaser.Math.Distance.Between(spawnX, spawnY, this.player.x, this.player.y);
+        if (distToPlayer > 150) {
+          const enemy = new Enemy(this, spawnX, spawnY);
+          enemy.setPlayer(this.player);
+          this.enemies.add(enemy);
+          break;
+        }
+      }
+      attempts++;
+    }
+  }
+
   private setupCamera(): void {
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
-    this.cameras.main.setZoom(1.2);
+
+    // Different zoom for battle arena (larger) vs portfolio buildings
+    if (!this.isPortfolioBuilding) {
+      this.cameras.main.setZoom(0.9); // Zoom out for huge battle arena
+    } else {
+      this.cameras.main.setZoom(1.2); // Zoom in for portfolio buildings
+    }
   }
 
   private setupCollisions(): void {
@@ -528,5 +650,11 @@ export class BuildingScene extends Phaser.Scene {
 
   update(time: number, delta: number): void {
     this.player.update(time, delta);
+
+    // Enemy respawning in battle arena
+    if (!this.isPortfolioBuilding && time > this.enemySpawnTimer) {
+      this.spawnSingleEnemy();
+      this.enemySpawnTimer = time + this.enemySpawnDelay;
+    }
   }
 }
