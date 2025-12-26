@@ -1,0 +1,9 @@
+export function isMobileDevice(): boolean {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+    || ('ontouchstart' in window)
+    || (navigator.maxTouchPoints > 0);
+}
+
+export function isPortraitOrientation(): boolean {
+  return window.innerHeight > window.innerWidth;
+}

@@ -5,6 +5,8 @@ import { Wizard } from '../entities/Wizard';
 import { Ammo } from '../entities/Ammo';
 import { cartToIso, isoToCart } from '../utils/IsometricUtils';
 import { WeaponType } from '../weapons/IWeapon';
+import { isMobileDevice } from '../utils/DeviceUtils';
+import { UIScene } from './UIScene';
 
 interface DoorData {
   tileX: number;
@@ -580,21 +582,26 @@ export class CityScene extends Phaser.Scene {
     const keyE = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
     keyE.on('down', () => this.tryEnterBuilding());
 
+    // Get UIScene reference
+    const uiScene = this.scene.get('UIScene');
+
+    // Mobile interact button
+    if (uiScene) {
+      uiScene.events.on('mobileInteract', () => this.tryEnterBuilding());
+    }
+
     // Enemy killed event
     this.events.on('enemyKilled', (points: number) => {
-      const uiScene = this.scene.get('UIScene');
       uiScene.events.emit('addScore', points);
     });
 
     // Player died event
     this.events.on('playerDied', () => {
       this.scene.pause();
-      const uiScene = this.scene.get('UIScene');
       uiScene.events.emit('showGameOver');
     });
 
     // Listen for score updates from UIScene
-    const uiScene = this.scene.get('UIScene');
     uiScene.events.on('scoreUpdated', (newScore: number) => {
       this.updateDifficultyBasedOnScore(newScore);
     });
@@ -679,5 +686,38 @@ export class CityScene extends Phaser.Scene {
       this.spawnEnemy();
       this.spawnTimer = time + this.spawnDelay;
     }
+
+    // Update mobile interact button visibility
+    if (isMobileDevice()) {
+      this.updateMobileInteractButton();
+    }
+  }
+
+  private updateMobileInteractButton(): void {
+    const nearDoor = this.isPlayerNearDoor();
+    const uiScene = this.scene.get('UIScene') as UIScene;
+    if (uiScene && uiScene.showInteractButton) {
+      uiScene.showInteractButton(nearDoor);
+    }
+  }
+
+  private isPlayerNearDoor(): boolean {
+    for (const door of this.doors) {
+      const doorIso = cartToIso(door.tileX, door.tileY);
+      const doorScreenX = doorIso.x + this.offsetX;
+      const doorScreenY = doorIso.y + this.offsetY;
+
+      const distance = Phaser.Math.Distance.Between(
+        this.player.x,
+        this.player.y,
+        doorScreenX,
+        doorScreenY
+      );
+
+      if (distance < 40) {
+        return true;
+      }
+    }
+    return false;
   }
 }

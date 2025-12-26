@@ -2,6 +2,14 @@ import Phaser from 'phaser';
 import { WeaponManager } from '../managers/WeaponManager';
 import { IWeapon, WeaponType } from '../weapons/IWeapon';
 import { ArmorType } from './Armor';
+import { VirtualJoystick } from '../ui/VirtualJoystick';
+import { MobileButton } from '../ui/MobileButton';
+
+interface MobileControls {
+  joystick: VirtualJoystick;
+  attackButton: MobileButton;
+  interactButton: MobileButton;
+}
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
   private cursors: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -19,6 +27,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private lastAutoSwitch: number = 0;
   private autoSwitchCooldown: number = 1000;
   public lastDirection: Phaser.Math.Vector2 = new Phaser.Math.Vector2(1, 0);
+  private mobileControls: MobileControls | null = null;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, 'player_right');
@@ -52,6 +61,17 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     // Setup weapon switching
     this.setupWeaponSwitching();
+
+    // Get mobile controls from registry if available
+    this.mobileControls = scene.registry.get('mobileControls') || null;
+
+    // Listen for mobile weapon switch events from UIScene
+    const uiScene = scene.scene.get('UIScene');
+    if (uiScene) {
+      uiScene.events.on('mobileWeaponSwitch', (weaponType: WeaponType) => {
+        this.switchWeapon(weaponType);
+      });
+    }
   }
 
   private setupWeaponSwitching(): void {
@@ -79,29 +99,40 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   private handleMovement(): void {
-    const velocity = new Phaser.Math.Vector2(0, 0);
+    let moveX = 0;
+    let moveY = 0;
 
+    // Check joystick input first
+    if (this.mobileControls?.joystick) {
+      const joystickValue = this.mobileControls.joystick.getValue();
+      moveX += joystickValue.x;
+      moveY += joystickValue.y;
+    }
+
+    // Also check keyboard input (allows both to work)
     if (this.cursors.left.isDown || this.wasd.A.isDown) {
-      velocity.x = -1;
+      moveX = -1;
     } else if (this.cursors.right.isDown || this.wasd.D.isDown) {
-      velocity.x = 1;
+      moveX = 1;
     }
 
     if (this.cursors.up.isDown || this.wasd.W.isDown) {
-      velocity.y = -1;
+      moveY = -1;
     } else if (this.cursors.down.isDown || this.wasd.S.isDown) {
-      velocity.y = 1;
+      moveY = 1;
     }
 
-    velocity.normalize().scale(this.speed);
+    // Create velocity vector and normalize if needed
+    const velocity = new Phaser.Math.Vector2(moveX, moveY);
+    if (velocity.length() > 1) {
+      velocity.normalize();
+    }
+    velocity.scale(this.speed);
     this.setVelocity(velocity.x, velocity.y);
 
     if (velocity.length() > 0) {
       this.lastDirection = velocity.clone().normalize();
       this.updateDirection(velocity);
-    } else {
-      // When stopped, maintain the last direction visually
-      // (don't change texture, keep facing the last movement direction)
     }
   }
 
@@ -172,9 +203,35 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       }
     }
 
-    if (pointer.isDown && this.currentWeapon.canAttack(time)) {
-      this.currentWeapon.attack(time, pointer, this);
+    // Check both mouse AND attack button for firing
+    const isMouseDown = pointer.isDown && !this.isPointerOnMobileControl(pointer);
+    const isAttackButtonPressed = this.mobileControls?.attackButton?.getIsPressed() ?? false;
+
+    if ((isMouseDown || isAttackButtonPressed) && this.currentWeapon.canAttack(time)) {
+      // For mobile attack button, use player's last direction for aiming
+      if (isAttackButtonPressed && !isMouseDown) {
+        // Create a mock pointer at the aim direction
+        const aimDistance = 100;
+        const aimX = this.x + this.lastDirection.x * aimDistance;
+        const aimY = this.y + this.lastDirection.y * aimDistance;
+        const mockPointer = { x: aimX, y: aimY, worldX: aimX, worldY: aimY } as Phaser.Input.Pointer;
+        this.currentWeapon.attack(time, mockPointer, this);
+      } else {
+        this.currentWeapon.attack(time, pointer, this);
+      }
     }
+  }
+
+  private isPointerOnMobileControl(_pointer: Phaser.Input.Pointer): boolean {
+    if (!this.mobileControls) return false;
+
+    // Check if pointer is within joystick area
+    const joystick = this.mobileControls.joystick;
+    if (joystick && joystick.isActive()) {
+      return true;
+    }
+
+    return false;
   }
 
   switchWeapon(weaponType: WeaponType): void {

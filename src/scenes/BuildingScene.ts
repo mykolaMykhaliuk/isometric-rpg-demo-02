@@ -7,6 +7,8 @@ import { Health } from '../entities/Health';
 import { cartToIso } from '../utils/IsometricUtils';
 import { WeaponType } from '../weapons/IWeapon';
 import { getPortfolioForBuilding } from '../config/portfolioData';
+import { isMobileDevice } from '../utils/DeviceUtils';
+import { UIScene } from './UIScene';
 
 interface BuildingData {
   buildingId: number;
@@ -658,6 +660,12 @@ export class BuildingScene extends Phaser.Scene {
     const keyE = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
     keyE.on('down', () => this.tryExitBuilding());
 
+    // Mobile interact button
+    const uiScene = this.scene.get('UIScene');
+    if (uiScene) {
+      uiScene.events.on('mobileInteract', () => this.tryExitBuilding());
+    }
+
     // Enemy killed event - store handler for cleanup
     this.enemyKilledHandler = (points: number) => {
       const uiScene = this.scene.get('UIScene');
@@ -807,6 +815,29 @@ export class BuildingScene extends Phaser.Scene {
       this.spawnSingleEnemy();
       this.enemySpawnTimer = time + this.enemySpawnDelay;
     }
+
+    // Update mobile interact button visibility
+    if (isMobileDevice()) {
+      this.updateMobileInteractButton();
+    }
+  }
+
+  private updateMobileInteractButton(): void {
+    const nearExit = this.isPlayerNearExit();
+    const uiScene = this.scene.get('UIScene') as UIScene;
+    if (uiScene && uiScene.showInteractButton) {
+      uiScene.showInteractButton(nearExit);
+    }
+  }
+
+  private isPlayerNearExit(): boolean {
+    const distance = Phaser.Math.Distance.Between(
+      this.player.x,
+      this.player.y,
+      this.exitPosition.x,
+      this.exitPosition.y
+    );
+    return distance < 40;
   }
 
   shutdown(): void {

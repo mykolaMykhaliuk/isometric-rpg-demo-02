@@ -24,6 +24,13 @@ const config: Phaser.Types.Core.GameConfig = {
   },
   pixelArt: false,
   antialias: true,
+  input: {
+    activePointers: 3, // Support multiple simultaneous touches for mobile
+  },
+  scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+  },
 };
 
 new Phaser.Game(config);

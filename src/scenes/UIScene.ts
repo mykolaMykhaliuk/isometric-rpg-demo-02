@@ -1,5 +1,8 @@
 import Phaser from 'phaser';
 import { WeaponType } from '../weapons/IWeapon';
+import { isMobileDevice } from '../utils/DeviceUtils';
+import { VirtualJoystick } from '../ui/VirtualJoystick';
+import { MobileButton } from '../ui/MobileButton';
 
 export class UIScene extends Phaser.Scene {
   private healthBar!: Phaser.GameObjects.Graphics;
@@ -12,6 +15,14 @@ export class UIScene extends Phaser.Scene {
   private weaponText!: Phaser.GameObjects.Text;
   private score: number = 0;
   private gameOverContainer!: Phaser.GameObjects.Container;
+
+  // Mobile controls
+  private joystick?: VirtualJoystick;
+  private attackButton?: MobileButton;
+  private gunButton?: MobileButton;
+  private swordButton?: MobileButton;
+  private interactButton?: MobileButton;
+  private isMobile: boolean = false;
 
   constructor() {
     super({ key: 'UIScene' });
@@ -26,6 +37,17 @@ export class UIScene extends Phaser.Scene {
     this.createControls();
     this.createGameOverScreen();
     this.setupEvents();
+
+    // Create mobile controls if on mobile device
+    this.isMobile = isMobileDevice();
+    if (this.isMobile) {
+      this.createMobileControls();
+
+      // Listen for resize/orientation changes
+      this.scale.on('resize', (gameSize: Phaser.Structs.Size) => {
+        this.repositionMobileControls(gameSize.width, gameSize.height);
+      });
+    }
   }
 
   private createHealthBar(): void {
@@ -385,6 +407,7 @@ export class UIScene extends Phaser.Scene {
         this.updateWeaponDisplay(weaponType);
         this.updateAmmoDisplay(weapon.getAmmoCount(), weapon.getMaxAmmo(), weaponType);
         this.showWeaponSwitchMessage(weaponType);
+        this.updateMobileWeaponDisplay(weaponType);
       });
 
       gameScene.events.on('weaponAutoSwitch', (_weaponType: WeaponType) => {
@@ -409,5 +432,99 @@ export class UIScene extends Phaser.Scene {
 
   getScore(): number {
     return this.score;
+  }
+
+  private createMobileControls(): void {
+    const { width, height } = this.cameras.main;
+
+    // Create controls (initial positions will be set by repositionMobileControls)
+    this.joystick = new VirtualJoystick(this, 0, 0, 80);
+    this.attackButton = new MobileButton(this, 0, 0, 70, 'attack');
+    this.gunButton = new MobileButton(this, 0, 0, 40, 'gun');
+    this.swordButton = new MobileButton(this, 0, 0, 40, 'sword');
+    this.interactButton = new MobileButton(this, 0, 0, 50, 'interact');
+    this.interactButton.setVisible(false);
+
+    // Position controls based on current orientation
+    this.repositionMobileControls(width, height);
+
+    // Store in registry for Player access
+    this.registry.set('mobileControls', {
+      joystick: this.joystick,
+      attackButton: this.attackButton,
+      interactButton: this.interactButton,
+    });
+
+    // Button event handlers
+    this.gunButton.on('pressed', () => {
+      this.events.emit('mobileWeaponSwitch', WeaponType.GUN);
+    });
+    this.swordButton.on('pressed', () => {
+      this.events.emit('mobileWeaponSwitch', WeaponType.SWORD);
+    });
+    this.interactButton.on('pressed', () => {
+      this.events.emit('mobileInteract');
+    });
+
+    // Set initial weapon highlight
+    this.gunButton.setActiveWeapon(true);
+  }
+
+  private repositionMobileControls(width: number, height: number): void {
+    if (!this.joystick || !this.attackButton || !this.gunButton || !this.swordButton || !this.interactButton) {
+      return;
+    }
+
+    const isPortrait = height > width;
+    const safeAreaBottom = 30; // Padding from bottom for safe area
+
+    if (isPortrait) {
+      // PORTRAIT: Both controls centered at bottom
+      const centerX = width / 2;
+      const controlSpacing = 100; // Space between joystick and attack button
+
+      // Joystick - bottom center-left
+      this.joystick.setPosition(centerX - controlSpacing, height - 120 - safeAreaBottom);
+
+      // Attack button - bottom center-right
+      this.attackButton.setPosition(centerX + controlSpacing, height - 120 - safeAreaBottom);
+
+      // Weapon buttons - centered above controls
+      this.gunButton.setPosition(centerX - 50, height - 210 - safeAreaBottom);
+      this.swordButton.setPosition(centerX + 50, height - 210 - safeAreaBottom);
+
+      // Interact button - centered above joystick/attack
+      this.interactButton.setPosition(centerX, height - 280 - safeAreaBottom);
+    } else {
+      // LANDSCAPE: Controls in corners (original layout)
+      // Joystick - bottom left
+      this.joystick.setPosition(120, height - 120);
+
+      // Attack button - bottom right
+      this.attackButton.setPosition(width - 100, height - 120);
+
+      // Weapon buttons - right side above attack
+      this.gunButton.setPosition(width - 130, height - 210);
+      this.swordButton.setPosition(width - 60, height - 210);
+
+      // Interact button - center
+      this.interactButton.setPosition(width / 2, height - 80);
+    }
+  }
+
+  showInteractButton(show: boolean): void {
+    if (this.interactButton) {
+      this.interactButton.setVisible(show);
+      if (show) {
+        this.interactButton.pulse();
+      }
+    }
+  }
+
+  updateMobileWeaponDisplay(weaponType: WeaponType): void {
+    if (this.gunButton && this.swordButton) {
+      this.gunButton.setActiveWeapon(weaponType === WeaponType.GUN);
+      this.swordButton.setActiveWeapon(weaponType === WeaponType.SWORD);
+    }
   }
 }
