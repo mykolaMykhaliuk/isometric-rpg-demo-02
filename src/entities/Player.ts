@@ -220,7 +220,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   getBullets(): Phaser.Physics.Arcade.Group | undefined {
-    return this.currentWeapon.getBullets?.();
+    // Always return the Gun's bullets for collision detection setup
+    // This ensures collisions work regardless of which weapon is currently equipped
+    const gun = this.weaponManager.getWeapon(WeaponType.GUN);
+    return gun?.getBullets?.();
   }
 
   takeDamage(amount: number): void {
