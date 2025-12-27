@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { WeaponType } from '../weapons/IWeapon';
+import { NetworkManager } from '../network/NetworkManager';
 
 export class UIScene extends Phaser.Scene {
   private healthBar!: Phaser.GameObjects.Graphics;
@@ -16,6 +17,12 @@ export class UIScene extends Phaser.Scene {
   // Multiplayer UI
   private playerCountText!: Phaser.GameObjects.Text;
 
+  // Settings UI
+  private settingsContainer!: Phaser.GameObjects.Container;
+  private settingsOpen: boolean = false;
+  private statusDot!: Phaser.GameObjects.Arc;
+  private statusText!: Phaser.GameObjects.Text;
+
   constructor() {
     super({ key: 'UIScene' });
   }
@@ -29,6 +36,8 @@ export class UIScene extends Phaser.Scene {
     this.createControls();
     this.createGameOverScreen();
     this.createMultiplayerIndicator();
+    this.createSettingsButton();
+    this.createSettingsModal();
     this.setupEvents();
   }
 
@@ -39,8 +48,8 @@ export class UIScene extends Phaser.Scene {
     const y = 70;
 
     // Connection status indicator
-    const statusDot = this.add.circle(0, 0, 5, isOffline ? 0x888888 : 0x00ff00);
-    const statusText = this.add.text(10, -7, isOffline ? 'OFFLINE' : 'ONLINE', {
+    this.statusDot = this.add.circle(0, 0, 5, isOffline ? 0x888888 : 0x00ff00);
+    this.statusText = this.add.text(10, -7, isOffline ? 'SINGLE PLAYER' : 'MULTIPLAYER', {
       fontSize: '12px',
       color: isOffline ? '#888888' : '#00ff00',
     });
@@ -51,16 +60,16 @@ export class UIScene extends Phaser.Scene {
       color: '#aaaaaa',
     });
 
-    this.add.container(x - 70, y, [
-      statusDot,
-      statusText,
+    this.add.container(x - 90, y, [
+      this.statusDot,
+      this.statusText,
       this.playerCountText
     ]);
 
     // Pulse animation for online indicator
     if (!isOffline) {
       this.tweens.add({
-        targets: statusDot,
+        targets: this.statusDot,
         alpha: { from: 1, to: 0.5 },
         duration: 1000,
         yoyo: true,
@@ -469,6 +478,340 @@ export class UIScene extends Phaser.Scene {
       scale: 1.3,
       duration: 100,
       yoyo: true,
+    });
+  }
+
+  // Settings UI methods
+  private createSettingsButton(): void {
+    const x = this.cameras.main.width - 40;
+    const y = 20;
+
+    // Gear icon button
+    const button = this.add.graphics();
+    button.fillStyle(0x444444, 0.8);
+    button.fillRoundedRect(x - 15, y - 15, 30, 30, 5);
+    button.lineStyle(2, 0x888888, 1);
+    button.strokeRoundedRect(x - 15, y - 15, 30, 30, 5);
+
+    // Gear icon (simple representation)
+    this.add.text(x, y, '⚙', {
+      fontSize: '20px',
+      color: '#ffffff',
+    }).setOrigin(0.5);
+
+    // Make interactive
+    const hitArea = this.add.rectangle(x, y, 30, 30, 0x000000, 0)
+      .setInteractive({ useHandCursor: true });
+
+    hitArea.on('pointerover', () => {
+      button.clear();
+      button.fillStyle(0x555555, 0.9);
+      button.fillRoundedRect(x - 15, y - 15, 30, 30, 5);
+      button.lineStyle(2, 0xaaaaaa, 1);
+      button.strokeRoundedRect(x - 15, y - 15, 30, 30, 5);
+    });
+
+    hitArea.on('pointerout', () => {
+      button.clear();
+      button.fillStyle(0x444444, 0.8);
+      button.fillRoundedRect(x - 15, y - 15, 30, 30, 5);
+      button.lineStyle(2, 0x888888, 1);
+      button.strokeRoundedRect(x - 15, y - 15, 30, 30, 5);
+    });
+
+    hitArea.on('pointerdown', () => {
+      this.toggleSettings();
+    });
+
+    // Also close on ESC key
+    this.input.keyboard!.on('keydown-ESC', () => {
+      if (this.settingsOpen) {
+        this.toggleSettings();
+      }
+    });
+  }
+
+  private createSettingsModal(): void {
+    const centerX = this.cameras.main.width / 2;
+    const centerY = this.cameras.main.height / 2;
+    const modalWidth = 300;
+    const modalHeight = 200;
+
+    // Background overlay
+    const overlay = this.add.rectangle(
+      this.cameras.main.width / 2,
+      this.cameras.main.height / 2,
+      this.cameras.main.width,
+      this.cameras.main.height,
+      0x000000,
+      0.7
+    );
+
+    // Modal background
+    const modalBg = this.add.graphics();
+    modalBg.fillStyle(0x2d2d44, 1);
+    modalBg.fillRoundedRect(centerX - modalWidth / 2, centerY - modalHeight / 2, modalWidth, modalHeight, 10);
+    modalBg.lineStyle(3, 0x666666, 1);
+    modalBg.strokeRoundedRect(centerX - modalWidth / 2, centerY - modalHeight / 2, modalWidth, modalHeight, 10);
+
+    // Title
+    const title = this.add.text(centerX, centerY - 70, 'SETTINGS', {
+      fontSize: '24px',
+      color: '#ffffff',
+      fontStyle: 'bold',
+    }).setOrigin(0.5);
+
+    // Game mode label
+    const modeLabel = this.add.text(centerX, centerY - 25, 'Game Mode:', {
+      fontSize: '16px',
+      color: '#aaaaaa',
+    }).setOrigin(0.5);
+
+    // Current mode indicator
+    const isOffline = (window as any).__OFFLINE_MODE__ === true;
+
+    // Single Player button
+    const singleBtn = this.createModeButton(
+      centerX - 70,
+      centerY + 20,
+      'Single Player',
+      isOffline,
+      () => this.switchToSinglePlayer()
+    );
+
+    // Multiplayer button
+    const multiBtn = this.createModeButton(
+      centerX + 70,
+      centerY + 20,
+      'Multiplayer',
+      !isOffline,
+      () => this.switchToMultiplayer()
+    );
+
+    // Close button
+    const closeBtn = this.add.text(centerX, centerY + 70, 'Close [ESC]', {
+      fontSize: '14px',
+      color: '#888888',
+    }).setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+
+    closeBtn.on('pointerover', () => closeBtn.setColor('#ffffff'));
+    closeBtn.on('pointerout', () => closeBtn.setColor('#888888'));
+    closeBtn.on('pointerdown', () => this.toggleSettings());
+
+    // Store reference for mode buttons to update selection
+    (this as any)._singleBtn = singleBtn;
+    (this as any)._multiBtn = multiBtn;
+
+    // Create container
+    this.settingsContainer = this.add.container(0, 0, [
+      overlay,
+      modalBg,
+      title,
+      modeLabel,
+      ...singleBtn,
+      ...multiBtn,
+      closeBtn,
+    ]);
+
+    this.settingsContainer.setDepth(2000);
+    this.settingsContainer.setVisible(false);
+  }
+
+  private createModeButton(
+    x: number,
+    y: number,
+    label: string,
+    selected: boolean,
+    onClick: () => void
+  ): Phaser.GameObjects.GameObject[] {
+    const width = 110;
+    const height = 40;
+
+    const bg = this.add.graphics();
+    const fillColor = selected ? 0x446644 : 0x333333;
+    const borderColor = selected ? 0x88ff88 : 0x666666;
+
+    bg.fillStyle(fillColor, 1);
+    bg.fillRoundedRect(x - width / 2, y - height / 2, width, height, 5);
+    bg.lineStyle(2, borderColor, 1);
+    bg.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 5);
+
+    const text = this.add.text(x, y, label, {
+      fontSize: '12px',
+      color: selected ? '#88ff88' : '#aaaaaa',
+      fontStyle: selected ? 'bold' : 'normal',
+    }).setOrigin(0.5);
+
+    const hitArea = this.add.rectangle(x, y, width, height, 0x000000, 0)
+      .setInteractive({ useHandCursor: true });
+
+    hitArea.on('pointerover', () => {
+      if (!selected) {
+        bg.clear();
+        bg.fillStyle(0x444444, 1);
+        bg.fillRoundedRect(x - width / 2, y - height / 2, width, height, 5);
+        bg.lineStyle(2, 0x888888, 1);
+        bg.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 5);
+      }
+    });
+
+    hitArea.on('pointerout', () => {
+      const currentFillColor = selected ? 0x446644 : 0x333333;
+      const currentBorderColor = selected ? 0x88ff88 : 0x666666;
+      bg.clear();
+      bg.fillStyle(currentFillColor, 1);
+      bg.fillRoundedRect(x - width / 2, y - height / 2, width, height, 5);
+      bg.lineStyle(2, currentBorderColor, 1);
+      bg.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 5);
+    });
+
+    hitArea.on('pointerdown', onClick);
+
+    // Store references for updating selection state
+    (hitArea as any)._bg = bg;
+    (hitArea as any)._text = text;
+    (hitArea as any)._x = x;
+    (hitArea as any)._y = y;
+    (hitArea as any)._width = width;
+    (hitArea as any)._height = height;
+
+    return [bg, text, hitArea];
+  }
+
+  private toggleSettings(): void {
+    this.settingsOpen = !this.settingsOpen;
+    this.settingsContainer.setVisible(this.settingsOpen);
+
+    // Pause/resume game scenes
+    const cityScene = this.scene.get('CityScene');
+    const buildingScene = this.scene.get('BuildingScene');
+
+    if (this.settingsOpen) {
+      if (cityScene.scene.isActive()) cityScene.scene.pause();
+      if (buildingScene.scene.isActive()) buildingScene.scene.pause();
+    } else {
+      if (cityScene.scene.isPaused()) cityScene.scene.resume();
+      if (buildingScene.scene.isPaused()) buildingScene.scene.resume();
+    }
+  }
+
+  private switchToSinglePlayer(): void {
+    const isCurrentlyOffline = (window as any).__OFFLINE_MODE__ === true;
+    if (isCurrentlyOffline) return; // Already in single player
+
+    // Disconnect from server
+    const networkManager = NetworkManager.getInstance();
+    networkManager.disconnect();
+
+    // Update global state
+    (window as any).__OFFLINE_MODE__ = true;
+    (window as any).__GAME_MODE__ = 'single';
+
+    // Update UI indicators
+    this.updateModeIndicator(true);
+
+    // Close settings and restart game
+    this.toggleSettings();
+    this.restartGame();
+  }
+
+  private switchToMultiplayer(): void {
+    const isCurrentlyOffline = (window as any).__OFFLINE_MODE__ === true;
+    if (!isCurrentlyOffline) return; // Already in multiplayer
+
+    // Update global state
+    (window as any).__OFFLINE_MODE__ = false;
+    (window as any).__GAME_MODE__ = 'multiplayer';
+
+    // Connect to server
+    const serverUrl = (window as any).__SERVER_URL__ || 'http://localhost:3001';
+    const networkManager = NetworkManager.getInstance();
+
+    networkManager.connect(serverUrl).then(() => {
+      // Update UI indicators
+      this.updateModeIndicator(false);
+
+      // Close settings and restart game
+      this.toggleSettings();
+      this.restartGame();
+    }).catch((error) => {
+      console.error('Failed to connect to server:', error);
+      // Revert to single player
+      (window as any).__OFFLINE_MODE__ = true;
+      (window as any).__GAME_MODE__ = 'single';
+
+      // Show error message
+      this.showConnectionError();
+    });
+  }
+
+  private updateModeIndicator(isOffline: boolean): void {
+    // Update status dot and text
+    if (this.statusDot) {
+      this.statusDot.fillColor = isOffline ? 0x888888 : 0x00ff00;
+    }
+    if (this.statusText) {
+      this.statusText.setText(isOffline ? 'SINGLE PLAYER' : 'MULTIPLAYER');
+      this.statusText.setColor(isOffline ? '#888888' : '#00ff00');
+    }
+    if (this.playerCountText) {
+      this.playerCountText.setText(isOffline ? '' : 'Players: 1');
+    }
+
+    // Update or remove pulse animation
+    this.tweens.killTweensOf(this.statusDot);
+    if (!isOffline) {
+      this.tweens.add({
+        targets: this.statusDot,
+        alpha: { from: 1, to: 0.5 },
+        duration: 1000,
+        yoyo: true,
+        repeat: -1,
+      });
+    } else {
+      this.statusDot.setAlpha(1);
+    }
+
+    // Recreate settings modal to update button states
+    this.settingsContainer.destroy();
+    this.createSettingsModal();
+  }
+
+  private restartGame(): void {
+    // Reset score
+    this.score = 0;
+    this.scoreText.setText('0');
+    this.updateHealthBar(100, 100);
+    this.updateArmorBar(0, 100);
+    this.updateAmmoDisplay(30, 30);
+
+    // Restart game scenes
+    this.scene.stop('CityScene');
+    this.scene.stop('BuildingScene');
+    this.scene.start('CityScene');
+  }
+
+  private showConnectionError(): void {
+    const message = this.add.text(
+      this.cameras.main.width / 2,
+      this.cameras.main.height / 2 + 100,
+      'Failed to connect to server.\nMake sure the server is running.',
+      {
+        fontSize: '16px',
+        color: '#ff6666',
+        backgroundColor: '#000000',
+        padding: { x: 15, y: 10 },
+        align: 'center',
+      }
+    ).setOrigin(0.5).setDepth(2001);
+
+    this.tweens.add({
+      targets: message,
+      alpha: 0,
+      duration: 500,
+      delay: 3000,
+      onComplete: () => message.destroy(),
     });
   }
 }
