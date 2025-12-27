@@ -681,6 +681,9 @@ export class BuildingScene extends Phaser.Scene {
       };
       uiScene.events.on('scoreUpdated', this.scoreUpdatedHandler);
     }
+
+    // Register shutdown handler
+    this.events.on('shutdown', this.shutdown, this);
   }
 
   private displayPortfolioInfo(): void {
