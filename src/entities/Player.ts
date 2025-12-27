@@ -220,7 +220,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   getBullets(): Phaser.Physics.Arcade.Group | undefined {
-    return this.currentWeapon.getBullets?.();
+    // Bullets are owned by the gun weapon, but collisions are set up at scene
+    // creation time. If the player starts a scene with the sword equipped,
+    // `currentWeapon.getBullets()` would be undefined and bullet/enemy overlaps
+    // would never be registered, making enemies "unkillable" when switching
+    // back to the gun later.
+    const gun = this.weaponManager.getWeapon(WeaponType.GUN);
+    return gun?.getBullets?.();
   }
 
   takeDamage(amount: number): void {
