@@ -212,6 +212,9 @@ export class BuildingScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Register shutdown handler for proper cleanup
+    this.events.on('shutdown', this.shutdown, this);
+
     this.createInterior();
     this.createPlayer();
     this.createEnemyGroup();
