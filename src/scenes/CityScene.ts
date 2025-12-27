@@ -44,6 +44,7 @@ export class CityScene extends Phaser.Scene {
   private baseSpawnDelay: number = 5000;
   private maxEnemies: number = 10;
   private baseMaxEnemies: number = 10;
+  private bulletEnemyOverlap?: Phaser.Physics.Arcade.Collider;
 
   // Data passed from BuildingScene when returning
   private fromBuildingId?: number;
@@ -438,6 +439,34 @@ export class CityScene extends Phaser.Scene {
       const enemy = new Enemy(this, spawnX!, spawnY!);
       enemy.setPlayer(this.player);
       this.enemies.add(enemy);
+      
+      // Ensure enemy physics body is enabled
+      if (enemy.body) {
+        (enemy.body as Phaser.Physics.Arcade.Body).enable = true;
+      }
+      
+      // Refresh collision detection to ensure new enemy is included
+      this.refreshCollisionDetection();
+    }
+  }
+  
+  private refreshCollisionDetection(): void {
+    // Re-setup bullet-enemy collision to ensure it's working
+    const bullets = this.player.getBullets();
+    if (bullets && this.enemies) {
+      // Remove old overlap if it exists
+      if (this.bulletEnemyOverlap) {
+        this.bulletEnemyOverlap.destroy();
+      }
+      
+      // Create new overlap
+      this.bulletEnemyOverlap = this.physics.add.overlap(
+        bullets,
+        this.enemies,
+        this.handleBulletEnemyCollision,
+        undefined,
+        this
+      );
     }
   }
 
@@ -478,7 +507,13 @@ export class CityScene extends Phaser.Scene {
     // Bullet vs Enemy collisions
     const bullets = this.player.getBullets();
     if (bullets) {
-      this.physics.add.overlap(
+      // Remove existing overlap if it exists
+      if (this.bulletEnemyOverlap) {
+        this.bulletEnemyOverlap.destroy();
+      }
+      
+      // Create new overlap collision
+      this.bulletEnemyOverlap = this.physics.add.overlap(
         bullets,
         this.enemies,
         this.handleBulletEnemyCollision,
@@ -673,6 +708,16 @@ export class CityScene extends Phaser.Scene {
 
     // Update obstruction transparency based on player position
     this.updateObstructionTransparency();
+
+    // Ensure all active enemies have enabled physics bodies
+    this.enemies.children.entries.forEach((enemy: any) => {
+      if (enemy && enemy.active && enemy.body && !enemy.isEnemyDying()) {
+        const body = enemy.body as Phaser.Physics.Arcade.Body;
+        if (!body.enable) {
+          body.enable = true;
+        }
+      }
+    });
 
     // Spawn enemies periodically
     if (time > this.spawnTimer) {

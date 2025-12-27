@@ -40,6 +40,7 @@ export class BuildingScene extends Phaser.Scene {
   private maxEnemies: number = 15;
   private baseSpawnDelay: number = 3000;
   private baseMaxEnemies: number = 15;
+  private bulletEnemyOverlap?: Phaser.Physics.Arcade.Collider;
 
   // Event handlers (stored for proper cleanup)
   private enemyKilledHandler?: (points: number) => void;
@@ -543,10 +544,38 @@ export class BuildingScene extends Phaser.Scene {
           const enemy = new Enemy(this, spawnX, spawnY);
           enemy.setPlayer(this.player);
           this.enemies.add(enemy);
+          
+          // Ensure enemy physics body is enabled
+          if (enemy.body) {
+            (enemy.body as Phaser.Physics.Arcade.Body).enable = true;
+          }
+          
+          // Refresh collision detection to ensure new enemy is included
+          this.refreshCollisionDetection();
           break;
         }
       }
       attempts++;
+    }
+  }
+  
+  private refreshCollisionDetection(): void {
+    // Re-setup bullet-enemy collision to ensure it's working
+    const bullets = this.player.getBullets();
+    if (bullets && this.enemies) {
+      // Remove old overlap if it exists
+      if (this.bulletEnemyOverlap) {
+        this.bulletEnemyOverlap.destroy();
+      }
+      
+      // Create new overlap
+      this.bulletEnemyOverlap = this.physics.add.overlap(
+        bullets,
+        this.enemies,
+        this.handleBulletEnemyCollision,
+        undefined,
+        this
+      );
     }
   }
 
@@ -595,7 +624,13 @@ export class BuildingScene extends Phaser.Scene {
     // Bullet vs Enemy
     const bullets = this.player.getBullets();
     if (bullets) {
-      this.physics.add.overlap(
+      // Remove existing overlap if it exists
+      if (this.bulletEnemyOverlap) {
+        this.bulletEnemyOverlap.destroy();
+      }
+      
+      // Create new overlap collision
+      this.bulletEnemyOverlap = this.physics.add.overlap(
         bullets,
         this.enemies,
         this.handleBulletEnemyCollision,
@@ -802,6 +837,16 @@ export class BuildingScene extends Phaser.Scene {
   update(time: number, delta: number): void {
     this.player.update(time, delta);
 
+    // Ensure all active enemies have enabled physics bodies
+    this.enemies.children.entries.forEach((enemy: any) => {
+      if (enemy && enemy.active && enemy.body && !enemy.isEnemyDying()) {
+        const body = enemy.body as Phaser.Physics.Arcade.Body;
+        if (!body.enable) {
+          body.enable = true;
+        }
+      }
+    });
+
     // Enemy respawning in battle arena
     if (!this.isPortfolioBuilding && time > this.enemySpawnTimer) {
       this.spawnSingleEnemy();
@@ -810,6 +855,12 @@ export class BuildingScene extends Phaser.Scene {
   }
 
   shutdown(): void {
+    // Clean up collision detection
+    if (this.bulletEnemyOverlap) {
+      this.bulletEnemyOverlap.destroy();
+      this.bulletEnemyOverlap = undefined;
+    }
+
     // Clean up event listeners to prevent accumulation on scene restart
     if (this.enemyKilledHandler) {
       this.events.off('enemyKilled', this.enemyKilledHandler);
