@@ -116,7 +116,7 @@ export class ConversationScene extends Phaser.Scene {
 
     // Add welcome message if this is the first time
     if (this.conversationMessages.length === 0) {
-      this.addMessage('Wizard', 'Welcome to Mykola Mykhaliuk\'s interactive portfolio! I am your guide through this realm. Ask me about his SKILLS, PROJECTS, FUTURE, or CONTACTS!', '#FFD700');
+      this.addMessage('Wizard', 'Welcome to Mykola Mykhaliuk\'s Interactive Portfolio Game! This is a creative CV where you explore his professional journey. CONTROLS: WASD to move, Left-Click to attack, E to enter buildings, 1/2 to switch weapons. GOAL: Explore 4 portfolio buildings (green doors) to learn about skills, projects, experience, and contacts. Fight bugs to earn points! Battle Arena (red door) spawns endless enemies for combat challenge. ITEMS: Find hearts (healing) in Contact building and blue armor in Skills building. Higher scores increase difficulty. Ask me anything!', '#FFD700');
     }
 
     // Focus the input field
@@ -222,7 +222,7 @@ export class ConversationScene extends Phaser.Scene {
     }
     // Controls/help
     else if (lowerQuestion.includes('help') || lowerQuestion.includes('how') || lowerQuestion.includes('control')) {
-      response = 'Use WASD to move, left-click to attack bugs, press E to enter buildings, and switch weapons with 1 and 2. Navigate through Mykola\'s world and discover his story!';
+      response = 'CONTROLS: WASD to move, Left-Click to attack, E to enter buildings, 1=Gun 2=Sword to switch weapons, Mouse Wheel to cycle weapons. BUILDINGS: Green doors = Portfolio (safe), Red door = Battle Arena (combat). ITEMS: Hearts in Contact building restore health, Blue armor in Skills building adds protection. Battle Arena has ammo pickups scattered around. Difficulty increases every 50 points!';
     }
     // Weapons (metaphor)
     else if (lowerQuestion.includes('weapon') || lowerQuestion.includes('gun') || lowerQuestion.includes('sword')) {
@@ -231,6 +231,10 @@ export class ConversationScene extends Phaser.Scene {
     // Score/points
     else if (lowerQuestion.includes('score') || lowerQuestion.includes('point')) {
       response = 'Each bug defeated adds to your score, representing solved problems and completed tasks. Higher scores mean more challenges - just like real development projects!';
+    }
+    // Healing and armor items
+    else if (lowerQuestion.includes('health') || lowerQuestion.includes('heal') || lowerQuestion.includes('armor') || lowerQuestion.includes('heart') || lowerQuestion.includes('item')) {
+      response = 'HEALING: Visit the Contact building (Get In Touch) to find heart pickups that restore your health. ARMOR: The Skills building (About Me & Skills) contains blue armor that adds protective shields. AMMO: Battle Arena has ammo scattered throughout. Items respawn when you re-enter buildings!';
     }
     // Greetings
     else if (lowerQuestion.includes('hi') || lowerQuestion.includes('hello') || lowerQuestion.includes('greetings')) {
