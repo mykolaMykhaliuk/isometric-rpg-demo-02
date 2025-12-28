@@ -20,6 +20,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private autoSwitchCooldown: number = 1000;
   public lastDirection: Phaser.Math.Vector2 = new Phaser.Math.Vector2(1, 0);
 
+  // Touch controls state
+  private touchMovement: { x: number; y: number } = { x: 0, y: 0 };
+  private touchAimDirection: { x: number; y: number } | null = null;
+  private isTouchShooting: boolean = false;
+  private useTouchControls: boolean = false;
+
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, 'player_right');
 
@@ -81,6 +87,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private handleMovement(): void {
     const velocity = new Phaser.Math.Vector2(0, 0);
 
+    // Check keyboard input
     if (this.cursors.left.isDown || this.wasd.A.isDown) {
       velocity.x = -1;
     } else if (this.cursors.right.isDown || this.wasd.D.isDown) {
@@ -91,6 +98,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       velocity.y = -1;
     } else if (this.cursors.down.isDown || this.wasd.S.isDown) {
       velocity.y = 1;
+    }
+
+    // Apply touch movement if using touch controls and no keyboard input
+    if (this.useTouchControls && velocity.length() === 0) {
+      velocity.x = this.touchMovement.x;
+      velocity.y = this.touchMovement.y;
     }
 
     velocity.normalize().scale(this.speed);
@@ -157,8 +170,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   private handleAttack(time: number): void {
-    const pointer = this.scene.input.activePointer;
-
     // Auto-switch to sword if gun has no ammo
     if (
       this.currentWeapon.getWeaponType() === WeaponType.GUN &&
@@ -172,9 +183,47 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       }
     }
 
+    // Handle touch shooting - only shoot when touch aim joystick triggers it
+    if (this.useTouchControls) {
+      if (this.isTouchShooting && this.touchAimDirection) {
+        if (this.currentWeapon.canAttack(time)) {
+          // Create a virtual pointer for touch aiming
+          const virtualPointer = this.createVirtualPointer();
+          this.currentWeapon.attack(time, virtualPointer, this);
+        }
+      }
+      // Don't use pointer.isDown when touch controls are enabled
+      return;
+    }
+
+    // Handle mouse/pointer shooting (only when not using touch controls)
+    const pointer = this.scene.input.activePointer;
     if (pointer.isDown && this.currentWeapon.canAttack(time)) {
       this.currentWeapon.attack(time, pointer, this);
     }
+  }
+
+  private createVirtualPointer(): Phaser.Input.Pointer {
+    // Create a pointer-like object for touch aiming
+    const pointer = this.scene.input.activePointer;
+    const aimDir = this.touchAimDirection!;
+
+    // Calculate aim position based on player position and aim direction
+    const aimDistance = 200; // Distance from player for aim calculation
+    const worldX = this.x + aimDir.x * aimDistance;
+    const worldY = this.y + aimDir.y * aimDistance;
+
+    // Create a mock pointer with the required properties
+    const virtualPointer = {
+      ...pointer,
+      worldX,
+      worldY,
+      x: worldX,
+      y: worldY,
+      isDown: true,
+    } as Phaser.Input.Pointer;
+
+    return virtualPointer;
   }
 
   switchWeapon(weaponType: WeaponType): void {
@@ -371,5 +420,37 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
     this.scene.events.emit('healthChanged', this.health, this.maxHealth);
     this.scene.events.emit('armorChanged', this.armor, this.maxArmor);
+  }
+
+  // Touch controls public API
+  setTouchControlsEnabled(enabled: boolean): void {
+    this.useTouchControls = enabled;
+  }
+
+  setTouchMovement(x: number, y: number): void {
+    this.touchMovement.x = x;
+    this.touchMovement.y = y;
+  }
+
+  setTouchAimDirection(x: number, y: number): void {
+    if (x === 0 && y === 0) {
+      this.touchAimDirection = null;
+    } else {
+      this.touchAimDirection = { x, y };
+      // Update last direction for sprite facing
+      const aimVector = new Phaser.Math.Vector2(x, y).normalize();
+      if (aimVector.length() > 0) {
+        this.lastDirection = aimVector;
+        this.updateDirection(aimVector);
+      }
+    }
+  }
+
+  setTouchShooting(isShooting: boolean): void {
+    this.isTouchShooting = isShooting;
+  }
+
+  isTouchControlsEnabled(): boolean {
+    return this.useTouchControls;
   }
 }

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { WeaponType } from '../weapons/IWeapon';
+import { TouchControls } from '../ui/TouchControls';
 
 export class UIScene extends Phaser.Scene {
   private healthBar!: Phaser.GameObjects.Graphics;
@@ -12,6 +13,8 @@ export class UIScene extends Phaser.Scene {
   private weaponText!: Phaser.GameObjects.Text;
   private score: number = 0;
   private gameOverContainer!: Phaser.GameObjects.Container;
+  private touchControls!: TouchControls;
+  private controlsText!: Phaser.GameObjects.Text;
 
   constructor() {
     super({ key: 'UIScene' });
@@ -26,6 +29,7 @@ export class UIScene extends Phaser.Scene {
     this.createControls();
     this.createGameOverScreen();
     this.setupEvents();
+    this.setupTouchControls();
   }
 
   private createHealthBar(): void {
@@ -287,14 +291,14 @@ export class UIScene extends Phaser.Scene {
     const x = 20;
     const y = this.cameras.main.height - 100;
 
-    const controlsText = [
+    const controlsTextContent = [
       'Controls:',
       'WASD / Arrows - Move',
       'Mouse - Aim & Shoot',
       'E - Enter/Exit Buildings',
     ].join('\n');
 
-    this.add.text(x, y, controlsText, {
+    this.controlsText = this.add.text(x, y, controlsTextContent, {
       fontSize: '12px',
       color: '#888888',
       lineSpacing: 4,
@@ -409,5 +413,77 @@ export class UIScene extends Phaser.Scene {
 
   getScore(): number {
     return this.score;
+  }
+
+  private setupTouchControls(): void {
+    this.touchControls = new TouchControls(this);
+
+    if (this.touchControls.isEnabled()) {
+      // Hide keyboard controls text on mobile
+      if (this.controlsText) {
+        this.controlsText.setVisible(false);
+      }
+
+      // Set up touch control callbacks
+      this.touchControls.setOnMovementChange((x: number, y: number) => {
+        this.emitToActiveScene('touchMovement', x, y);
+      });
+
+      this.touchControls.setOnAimChange((x: number, y: number, _angle: number) => {
+        this.emitToActiveScene('touchAim', x, y);
+      });
+
+      this.touchControls.setOnShootStart(() => {
+        this.emitToActiveScene('touchShootStart');
+      });
+
+      this.touchControls.setOnShootEnd(() => {
+        this.emitToActiveScene('touchShootEnd');
+      });
+
+      this.touchControls.setOnEnterBuilding(() => {
+        this.emitToActiveScene('touchEnterBuilding');
+      });
+
+      this.touchControls.setOnSwitchWeapon(() => {
+        this.emitToActiveScene('touchSwitchWeapon');
+      });
+
+      this.touchControls.setOnSelectWeapon((weaponType) => {
+        this.emitToActiveScene('touchSelectWeapon', weaponType);
+      });
+
+      // Listen for weapon changes to update touch UI
+      const cityScene = this.scene.get('CityScene');
+      const buildingScene = this.scene.get('BuildingScene');
+
+      [cityScene, buildingScene].forEach((gameScene) => {
+        gameScene.events.on('weaponChanged', (weaponType: WeaponType) => {
+          this.touchControls.setCurrentWeapon(weaponType);
+        });
+      });
+    }
+  }
+
+  private emitToActiveScene(event: string, ...args: any[]): void {
+    // Emit to CityScene if it's active
+    if (this.scene.isActive('CityScene')) {
+      const cityScene = this.scene.get('CityScene');
+      if (cityScene) {
+        cityScene.events.emit(event, ...args);
+      }
+    }
+
+    // Emit to BuildingScene if it's active
+    if (this.scene.isActive('BuildingScene')) {
+      const buildingScene = this.scene.get('BuildingScene');
+      if (buildingScene) {
+        buildingScene.events.emit(event, ...args);
+      }
+    }
+  }
+
+  getTouchControls(): TouchControls | null {
+    return this.touchControls || null;
   }
 }

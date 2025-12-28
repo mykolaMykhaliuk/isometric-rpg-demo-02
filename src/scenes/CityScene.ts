@@ -609,6 +609,55 @@ export class CityScene extends Phaser.Scene {
       this.updateDifficultyBasedOnScore(newScore);
     };
     uiScene.events.on('scoreUpdated', this.scoreUpdatedHandler);
+
+    // Setup touch control events
+    this.setupTouchEvents();
+  }
+
+  private setupTouchEvents(): void {
+    // Check if touch controls are enabled
+    const uiScene = this.scene.get('UIScene') as any;
+    const touchControls = uiScene?.getTouchControls?.();
+    if (!touchControls || !touchControls.isEnabled()) return;
+
+    // Enable touch controls on player
+    this.player.setTouchControlsEnabled(true);
+
+    // Touch movement
+    this.events.on('touchMovement', (x: number, y: number) => {
+      this.player.setTouchMovement(x, y);
+    });
+
+    // Touch aiming
+    this.events.on('touchAim', (x: number, y: number) => {
+      this.player.setTouchAimDirection(x, y);
+    });
+
+    // Touch shooting
+    this.events.on('touchShootStart', () => {
+      this.player.setTouchShooting(true);
+    });
+
+    this.events.on('touchShootEnd', () => {
+      this.player.setTouchShooting(false);
+    });
+
+    // Touch enter building
+    this.events.on('touchEnterBuilding', () => {
+      this.tryEnterBuilding();
+    });
+
+    // Touch switch weapon
+    this.events.on('touchSwitchWeapon', () => {
+      const currentType = this.player.getCurrentWeaponType();
+      const newType = currentType === WeaponType.GUN ? WeaponType.SWORD : WeaponType.GUN;
+      this.player.switchWeapon(newType);
+    });
+
+    // Touch select weapon
+    this.events.on('touchSelectWeapon', (weaponType: WeaponType) => {
+      this.player.switchWeapon(weaponType);
+    });
   }
 
   shutdown(): void {
