@@ -93,11 +93,22 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   private handleMovement(): void {
     const velocity = new Phaser.Math.Vector2(0, 0);
+    let directionForFacing: Phaser.Math.Vector2 | null = null;
 
     // Check mobile controls first
     if (this.mobileControlState) {
       velocity.x = this.mobileControlState.movementX;
       velocity.y = this.mobileControlState.movementY;
+      
+      // Use aim direction for facing if aim joystick is active, otherwise use movement
+      if (this.mobileControlState.aimX !== 0 || this.mobileControlState.aimY !== 0) {
+        directionForFacing = new Phaser.Math.Vector2(
+          this.mobileControlState.aimX,
+          this.mobileControlState.aimY
+        ).normalize();
+      } else if (velocity.length() > 0) {
+        directionForFacing = velocity.clone().normalize();
+      }
     } else {
       // Fall back to keyboard controls
       if (this.cursors && this.wasd) {
@@ -113,17 +124,26 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
           velocity.y = 1;
         }
       }
+      
+      if (velocity.length() > 0) {
+        directionForFacing = velocity.clone().normalize();
+      }
     }
 
     velocity.normalize().scale(this.speed);
     this.setVelocity(velocity.x, velocity.y);
 
-    if (velocity.length() > 0) {
+    // Update facing direction based on aim or movement
+    if (directionForFacing && directionForFacing.length() > 0) {
+      this.lastDirection = directionForFacing.clone();
+      this.updateDirection(directionForFacing);
+    } else if (velocity.length() > 0) {
+      // Fallback: use movement direction
       this.lastDirection = velocity.clone().normalize();
       this.updateDirection(velocity);
     } else {
       // When stopped, maintain the last direction visually
-      // (don't change texture, keep facing the last movement direction)
+      // (don't change texture, keep facing the last movement/aim direction)
     }
   }
 
@@ -180,7 +200,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   private handleAttack(time: number): void {
     // Handle weapon switching from mobile controls
-    if (this.mobileControlState?.switchWeapon) {
+    if (this.mobileControlState?.cycleWeapon) {
+      // Cycle to next weapon
+      this.cycleWeaponNext();
+      this.mobileControlState.cycleWeapon = false;
+    } else if (this.mobileControlState?.switchWeapon !== undefined) {
+      // Direct weapon selection (from top buttons)
       this.switchWeapon(this.mobileControlState.switchWeapon);
       this.mobileControlState.switchWeapon = undefined;
     }
@@ -204,47 +229,42 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     let attackPointer: Phaser.Input.Pointer = pointer;
 
     if (this.mobileControlState?.isAttacking) {
-      // Mobile attack - use screen coordinates from mobile controls or attack in movement direction
+      // Mobile attack - use aim direction from right joystick
       shouldAttack = true;
       
-      if (this.mobileControlState.attackScreenX !== undefined && 
-          this.mobileControlState.attackScreenY !== undefined) {
-        // Create a pointer-like object with the screen coordinates
-        attackPointer = {
-          ...pointer,
-          x: this.mobileControlState.attackScreenX,
-          y: this.mobileControlState.attackScreenY,
-          isDown: true,
-        } as Phaser.Input.Pointer;
+      // Use aim direction from mobile controls
+      let aimDir: Phaser.Math.Vector2;
+      if (this.mobileControlState.aimX !== 0 || this.mobileControlState.aimY !== 0) {
+        // Use aim joystick direction
+        aimDir = new Phaser.Math.Vector2(
+          this.mobileControlState.aimX,
+          this.mobileControlState.aimY
+        ).normalize();
       } else {
-        // Attack in the direction the player is moving/facing
-        // Use movement direction from mobile controls or last direction
-        let attackDir: Phaser.Math.Vector2;
+        // Fallback: use movement direction or last direction
         if (this.mobileControlState.movementX !== 0 || this.mobileControlState.movementY !== 0) {
-          // Use current movement direction
-          attackDir = new Phaser.Math.Vector2(
+          aimDir = new Phaser.Math.Vector2(
             this.mobileControlState.movementX,
             this.mobileControlState.movementY
           ).normalize();
         } else if (this.lastDirection.length() > 0) {
-          // Use last direction
-          attackDir = this.lastDirection.clone().normalize();
+          aimDir = this.lastDirection.clone().normalize();
         } else {
-          // Default: attack right
-          attackDir = new Phaser.Math.Vector2(1, 0);
+          // Default: aim right
+          aimDir = new Phaser.Math.Vector2(1, 0);
         }
-        
-        // Convert player position + direction to screen coordinates
-        const attackWorldX = this.x + attackDir.x * 100;
-        const attackWorldY = this.y + attackDir.y * 100;
-        const screenPoint = this.scene.cameras.main.getWorldPoint(attackWorldX, attackWorldY);
-        attackPointer = {
-          ...pointer,
-          x: screenPoint.x,
-          y: screenPoint.y,
-          isDown: true,
-        } as Phaser.Input.Pointer;
       }
+      
+      // Convert player position + aim direction to screen coordinates
+      const attackWorldX = this.x + aimDir.x * 100;
+      const attackWorldY = this.y + aimDir.y * 100;
+      const screenPoint = this.scene.cameras.main.getWorldPoint(attackWorldX, attackWorldY);
+      attackPointer = {
+        ...pointer,
+        x: screenPoint.x,
+        y: screenPoint.y,
+        isDown: true,
+      } as Phaser.Input.Pointer;
     } else if (pointer.isDown) {
       // Desktop attack - use mouse pointer
       shouldAttack = true;
