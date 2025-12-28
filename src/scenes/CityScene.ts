@@ -214,7 +214,7 @@ export class CityScene extends Phaser.Scene {
         } else if (tileType === 4 || tileType === 6) {
           // Door position - add ground tile and mark as door
           const isPortfolioDoor = tileType === 6;
-          const doorColor = isPortfolioDoor ? 0x00bfff : 0xffff00; // Cyan for portfolio, yellow for battle
+          const doorColor = isPortfolioDoor ? 0x00ff00 : 0xff0000; // Green for portfolio, red for battle
 
           this.doors.push({ tileX: x, tileY: y, buildingId: buildingId++, isPortfolio: isPortfolioDoor });
 
@@ -238,7 +238,7 @@ export class CityScene extends Phaser.Scene {
           });
 
           // Add interaction hint with better styling
-          const hintColor = isPortfolioDoor ? '#00bfff' : '#ffff00';
+          const hintColor = isPortfolioDoor ? '#00ff00' : '#ff0000';
           const hint = this.add.text(screenX, screenY - 25, 'E', {
             fontSize: '14px',
             fontStyle: 'bold',
@@ -273,6 +273,9 @@ export class CityScene extends Phaser.Scene {
       const screenX = isoPos.x + this.offsetX;
       const screenY = isoPos.y + this.offsetY;
 
+      // Determine label color based on building type
+      const labelColor = label.text === 'BATTLE' ? '#ff0000' : '#00ff00'; // Red for battle, green for others
+
       // Create individual letter sprites laid out across the roof
       const letterSpacing = 18;
       const totalWidth = (label.text.length - 1) * letterSpacing;
@@ -288,7 +291,7 @@ export class CityScene extends Phaser.Scene {
           fontSize: '24px',
           fontFamily: 'Arial Black, Arial',
           fontStyle: 'bold',
-          color: '#ffffff',
+          color: labelColor,
           stroke: '#000000',
           strokeThickness: 4,
         }).setOrigin(0.5);
