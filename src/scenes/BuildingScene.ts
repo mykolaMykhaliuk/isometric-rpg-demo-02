@@ -34,12 +34,12 @@ export class BuildingScene extends Phaser.Scene {
   private offsetX: number = 400;
   private offsetY: number = 100;
 
-  // Battle arena settings
+  // Battle arena settings - increased base difficulty
   private enemySpawnTimer: number = 0;
-  private enemySpawnDelay: number = 3000;
-  private maxEnemies: number = 15;
-  private baseSpawnDelay: number = 3000;
-  private baseMaxEnemies: number = 15;
+  private enemySpawnDelay: number = 2500;
+  private maxEnemies: number = 20;
+  private baseSpawnDelay: number = 2500;
+  private baseMaxEnemies: number = 20;
 
   // Event handlers (stored for proper cleanup)
   private enemyKilledHandler?: (points: number) => void;
@@ -511,8 +511,18 @@ export class BuildingScene extends Phaser.Scene {
       return;
     }
 
-    // Initial enemy spawning for battle buildings
-    const numEnemies = Phaser.Math.Between(8, 12);
+    // Initial enemy spawning for battle buildings - scales aggressively with difficulty
+    // Get current score to determine initial enemy count
+    const uiScene = this.scene.get('UIScene') as any;
+    const currentScore = (uiScene && uiScene.getScore) ? uiScene.getScore() : 0;
+    const difficultyLevel = Math.floor(currentScore / 500);
+
+    // Base spawn: 10-15 enemies, increased by 20% per difficulty level (aggressive scaling)
+    const baseMin = 10;
+    const baseMax = 15;
+    const scaledMin = Math.floor(baseMin * Math.pow(1.2, difficultyLevel));
+    const scaledMax = Math.floor(baseMax * Math.pow(1.2, difficultyLevel));
+    const numEnemies = Phaser.Math.Between(scaledMin, scaledMax);
 
     for (let i = 0; i < numEnemies; i++) {
       this.spawnSingleEnemy();
@@ -552,9 +562,15 @@ export class BuildingScene extends Phaser.Scene {
   private updateDifficultyBasedOnScore(newScore: number): void {
     if (this.isPortfolioBuilding) return; // Only battle arena
 
-    const difficultyLevel = Math.floor(newScore / 50);
-    this.maxEnemies = Math.min(this.baseMaxEnemies + difficultyLevel * 2, 30);
-    this.enemySpawnDelay = Math.max(this.baseSpawnDelay - difficultyLevel * 400, 1000);
+    // Every 500 points = 1 difficulty level (faster scaling)
+    const difficultyLevel = Math.floor(newScore / 500);
+
+    // Increase max enemies by 20% per level (aggressive exponential scaling)
+    // This grows very fast: 15 → 18 → 22 → 26 → 31 → 37 → 45 → 54 → 65...
+    this.maxEnemies = Math.floor(this.baseMaxEnemies * Math.pow(1.2, difficultyLevel));
+
+    // Spawn enemies much faster as difficulty increases (minimum 500ms)
+    this.enemySpawnDelay = Math.max(this.baseSpawnDelay - difficultyLevel * 300, 500);
   }
 
   private setupCamera(): void {
