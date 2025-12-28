@@ -715,9 +715,16 @@ export class BuildingScene extends Phaser.Scene {
   }
 
   private setupEvents(): void {
-    // Exit building on E key
-    const keyE = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
-    keyE.on('down', () => this.tryExitBuilding());
+    // Exit building on E key (if keyboard available)
+    if (this.input.keyboard) {
+      const keyE = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
+      keyE.on('down', () => this.tryExitBuilding());
+    }
+    
+    // Mobile interact button
+    this.events.on('mobileInteract', () => {
+      this.tryExitBuilding();
+    });
 
     // Enemy killed event - remove existing listener first to prevent duplicates
     if (this.enemyKilledHandler) {

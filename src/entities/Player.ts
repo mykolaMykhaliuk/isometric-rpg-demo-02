@@ -2,10 +2,11 @@ import Phaser from 'phaser';
 import { WeaponManager } from '../managers/WeaponManager';
 import { IWeapon, WeaponType } from '../weapons/IWeapon';
 import { ArmorType } from './Armor';
+import { MobileControlState } from '../managers/MobileControls';
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
-  private cursors: Phaser.Types.Input.Keyboard.CursorKeys;
-  private wasd: { W: Phaser.Input.Keyboard.Key; A: Phaser.Input.Keyboard.Key; S: Phaser.Input.Keyboard.Key; D: Phaser.Input.Keyboard.Key };
+  private cursors: Phaser.Types.Input.Keyboard.CursorKeys | null = null;
+  private wasd: { W: Phaser.Input.Keyboard.Key; A: Phaser.Input.Keyboard.Key; S: Phaser.Input.Keyboard.Key; D: Phaser.Input.Keyboard.Key } | null = null;
   private speed: number = 150;
   private health: number = 100;
   private maxHealth: number = 100;
@@ -19,6 +20,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private lastAutoSwitch: number = 0;
   private autoSwitchCooldown: number = 1000;
   public lastDirection: Phaser.Math.Vector2 = new Phaser.Math.Vector2(1, 0);
+  private mobileControlState: MobileControlState | null = null;
+  private virtualPointer: Phaser.Input.Pointer | null = null;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, 'player_right');
@@ -38,13 +41,19 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       (this.body as Phaser.Physics.Arcade.Body).setOffset(6, 10);
     }
 
-    this.cursors = scene.input.keyboard!.createCursorKeys();
-    this.wasd = {
-      W: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-      A: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-      S: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S),
-      D: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-    };
+    // Only setup keyboard if available (may not be available on mobile)
+    if (scene.input.keyboard) {
+      this.cursors = scene.input.keyboard.createCursorKeys();
+      this.wasd = {
+        W: scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
+        A: scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
+        S: scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
+        D: scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
+      };
+    }
+    
+    // Create virtual pointer for mobile attack
+    this.virtualPointer = scene.input.activePointer;
 
     // Initialize weapon system
     this.weaponManager = new WeaponManager(scene);
@@ -78,19 +87,32 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.updateDepth();
   }
 
+  setMobileControlState(state: MobileControlState | null): void {
+    this.mobileControlState = state;
+  }
+
   private handleMovement(): void {
     const velocity = new Phaser.Math.Vector2(0, 0);
 
-    if (this.cursors.left.isDown || this.wasd.A.isDown) {
-      velocity.x = -1;
-    } else if (this.cursors.right.isDown || this.wasd.D.isDown) {
-      velocity.x = 1;
-    }
+    // Check mobile controls first
+    if (this.mobileControlState) {
+      velocity.x = this.mobileControlState.movementX;
+      velocity.y = this.mobileControlState.movementY;
+    } else {
+      // Fall back to keyboard controls
+      if (this.cursors && this.wasd) {
+        if (this.cursors.left.isDown || this.wasd.A.isDown) {
+          velocity.x = -1;
+        } else if (this.cursors.right.isDown || this.wasd.D.isDown) {
+          velocity.x = 1;
+        }
 
-    if (this.cursors.up.isDown || this.wasd.W.isDown) {
-      velocity.y = -1;
-    } else if (this.cursors.down.isDown || this.wasd.S.isDown) {
-      velocity.y = 1;
+        if (this.cursors.up.isDown || this.wasd.W.isDown) {
+          velocity.y = -1;
+        } else if (this.cursors.down.isDown || this.wasd.S.isDown) {
+          velocity.y = 1;
+        }
+      }
     }
 
     velocity.normalize().scale(this.speed);
@@ -157,7 +179,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   private handleAttack(time: number): void {
-    const pointer = this.scene.input.activePointer;
+    // Handle weapon switching from mobile controls
+    if (this.mobileControlState?.switchWeapon) {
+      this.switchWeapon(this.mobileControlState.switchWeapon);
+      this.mobileControlState.switchWeapon = undefined;
+    }
 
     // Auto-switch to sword if gun has no ammo
     if (
@@ -172,8 +198,60 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       }
     }
 
-    if (pointer.isDown && this.currentWeapon.canAttack(time)) {
-      this.currentWeapon.attack(time, pointer, this);
+    // Determine attack input source
+    const pointer = this.scene.input.activePointer;
+    let shouldAttack = false;
+    let attackPointer: Phaser.Input.Pointer = pointer;
+
+    if (this.mobileControlState?.isAttacking) {
+      // Mobile attack - use screen coordinates from mobile controls or attack in movement direction
+      shouldAttack = true;
+      
+      if (this.mobileControlState.attackScreenX !== undefined && 
+          this.mobileControlState.attackScreenY !== undefined) {
+        // Create a pointer-like object with the screen coordinates
+        attackPointer = {
+          ...pointer,
+          x: this.mobileControlState.attackScreenX,
+          y: this.mobileControlState.attackScreenY,
+          isDown: true,
+        } as Phaser.Input.Pointer;
+      } else {
+        // Attack in the direction the player is moving/facing
+        // Use movement direction from mobile controls or last direction
+        let attackDir: Phaser.Math.Vector2;
+        if (this.mobileControlState.movementX !== 0 || this.mobileControlState.movementY !== 0) {
+          // Use current movement direction
+          attackDir = new Phaser.Math.Vector2(
+            this.mobileControlState.movementX,
+            this.mobileControlState.movementY
+          ).normalize();
+        } else if (this.lastDirection.length() > 0) {
+          // Use last direction
+          attackDir = this.lastDirection.clone().normalize();
+        } else {
+          // Default: attack right
+          attackDir = new Phaser.Math.Vector2(1, 0);
+        }
+        
+        // Convert player position + direction to screen coordinates
+        const attackWorldX = this.x + attackDir.x * 100;
+        const attackWorldY = this.y + attackDir.y * 100;
+        const screenPoint = this.scene.cameras.main.getWorldPoint(attackWorldX, attackWorldY);
+        attackPointer = {
+          ...pointer,
+          x: screenPoint.x,
+          y: screenPoint.y,
+          isDown: true,
+        } as Phaser.Input.Pointer;
+      }
+    } else if (pointer.isDown) {
+      // Desktop attack - use mouse pointer
+      shouldAttack = true;
+    }
+
+    if (shouldAttack && this.currentWeapon.canAttack(time)) {
+      this.currentWeapon.attack(time, attackPointer, this);
     }
   }
 

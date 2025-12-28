@@ -584,9 +584,16 @@ export class CityScene extends Phaser.Scene {
   }
 
   private setupEvents(): void {
-    // Enter building on E key
-    const keyE = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
-    keyE.on('down', () => this.tryEnterBuilding());
+    // Enter building on E key (if keyboard available)
+    if (this.input.keyboard) {
+      const keyE = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
+      keyE.on('down', () => this.tryEnterBuilding());
+    }
+    
+    // Mobile interact button
+    this.events.on('mobileInteract', () => {
+      this.tryEnterBuilding();
+    });
 
     // Enemy killed event - store handler for cleanup
     this.enemyKilledHandler = (points: number) => {

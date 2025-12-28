@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { WeaponType } from '../weapons/IWeapon';
+import { MobileControls } from '../managers/MobileControls';
 
 export class UIScene extends Phaser.Scene {
   private healthBar!: Phaser.GameObjects.Graphics;
@@ -12,6 +13,7 @@ export class UIScene extends Phaser.Scene {
   private weaponText!: Phaser.GameObjects.Text;
   private score: number = 0;
   private gameOverContainer!: Phaser.GameObjects.Container;
+  private mobileControls!: MobileControls;
 
   constructor() {
     super({ key: 'UIScene' });
@@ -25,7 +27,45 @@ export class UIScene extends Phaser.Scene {
     this.createScoreDisplay();
     this.createControls();
     this.createGameOverScreen();
+    this.setupMobileControls();
     this.setupEvents();
+  }
+
+  private setupMobileControls(): void {
+    this.mobileControls = new MobileControls(this);
+    this.mobileControls.create();
+    
+    // Update mobile control state for player every frame using a timer
+    this.time.addEvent({
+      delay: 16, // ~60fps
+      callback: () => {
+        this.updatePlayerMobileControls();
+      },
+      loop: true,
+    });
+  }
+
+  private updatePlayerMobileControls(): void {
+    if (!this.mobileControls || !this.mobileControls.isMobileDevice()) return;
+    
+    // Get the active game scene (CityScene or BuildingScene)
+    const cityScene = this.scene.get('CityScene');
+    const buildingScene = this.scene.get('BuildingScene');
+    
+    const activeScene = cityScene.scene.isActive() ? cityScene : 
+                       buildingScene.scene.isActive() ? buildingScene : null;
+    
+    if (activeScene && (activeScene as any).player) {
+      const player = (activeScene as any).player;
+      const controlState = this.mobileControls.getControlState();
+      player.setMobileControlState(controlState);
+      
+      // Handle interact button
+      if (controlState.interact) {
+        // Emit interact event to the active scene
+        activeScene.events.emit('mobileInteract');
+      }
+    }
   }
 
   private createHealthBar(): void {
@@ -287,18 +327,22 @@ export class UIScene extends Phaser.Scene {
     const x = 20;
     const y = this.cameras.main.height - 100;
 
-    const controlsText = [
-      'Controls:',
-      'WASD / Arrows - Move',
-      'Mouse - Aim & Shoot',
-      'E - Enter/Exit Buildings',
-    ].join('\n');
+    // Only show keyboard controls on desktop
+    const mobileControls = new MobileControls(this);
+    if (!mobileControls.isMobileDevice()) {
+      const controlsText = [
+        'Controls:',
+        'WASD / Arrows - Move',
+        'Mouse - Aim & Shoot',
+        'E - Enter/Exit Buildings',
+      ].join('\n');
 
-    this.add.text(x, y, controlsText, {
-      fontSize: '12px',
-      color: '#888888',
-      lineSpacing: 4,
-    });
+      this.add.text(x, y, controlsText, {
+        fontSize: '12px',
+        color: '#888888',
+        lineSpacing: 4,
+      });
+    }
   }
 
   private createGameOverScreen(): void {
@@ -348,19 +392,39 @@ export class UIScene extends Phaser.Scene {
 
     this.gameOverContainer.setVisible(true);
 
-    // Setup restart key
-    this.input.keyboard!.once('keydown-R', () => {
-      this.score = 0;
-      this.scoreText.setText('0');
-      this.gameOverContainer.setVisible(false);
-      this.updateHealthBar(100, 100);
-      this.updateAmmoDisplay(30, 30);
-
-      // Restart the game
-      this.scene.stop('CityScene');
-      this.scene.stop('BuildingScene');
-      this.scene.start('CityScene');
+    // Setup restart - keyboard for desktop, touch for mobile
+    if (this.input.keyboard) {
+      this.input.keyboard.once('keydown-R', () => {
+        this.restartGame();
+      });
+    }
+    
+    // Mobile: make restart text clickable
+    const restartText = this.gameOverContainer.list[4] as Phaser.GameObjects.Text;
+    restartText.setInteractive({ useHandCursor: true });
+    restartText.on('pointerdown', () => {
+      this.restartGame();
     });
+    
+    // Also listen for any tap on the game over screen (mobile-friendly)
+    const bg = this.gameOverContainer.list[0] as Phaser.GameObjects.Rectangle;
+    bg.setInteractive();
+    bg.once('pointerdown', () => {
+      this.restartGame();
+    });
+  }
+
+  private restartGame(): void {
+    this.score = 0;
+    this.scoreText.setText('0');
+    this.gameOverContainer.setVisible(false);
+    this.updateHealthBar(100, 100);
+    this.updateAmmoDisplay(30, 30);
+
+    // Restart the game
+    this.scene.stop('CityScene');
+    this.scene.stop('BuildingScene');
+    this.scene.start('CityScene');
   }
 
   private setupEvents(): void {
