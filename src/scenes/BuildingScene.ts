@@ -623,6 +623,17 @@ export class BuildingScene extends Phaser.Scene {
     if (this.wallBodies) {
       this.physics.add.collider(this.player, this.wallBodies);
       this.physics.add.collider(this.enemies, this.wallBodies);
+
+      // Bullet vs Walls - bullets should be destroyed on wall impact
+      if (bullets) {
+        this.physics.add.collider(
+          bullets,
+          this.wallBodies,
+          this.handleBulletWallCollision,
+          undefined,
+          this
+        );
+      }
     }
   }
 
@@ -666,6 +677,41 @@ export class BuildingScene extends Phaser.Scene {
     this.time.delayedCall(150, () => hitEffect.destroy());
 
     enemyEntity.takeDamage(20);
+  }
+
+  private handleBulletWallCollision(
+    bullet: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile,
+    _wall: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile
+  ): void {
+    const bulletSprite = bullet as Phaser.Physics.Arcade.Sprite;
+
+    // Guard against invalid or already processed bullets
+    if (!bulletSprite || !bulletSprite.active) return;
+
+    // Disable bullet completely
+    bulletSprite.setActive(false);
+    bulletSprite.setVisible(false);
+    bulletSprite.setVelocity(0, 0);
+    if (bulletSprite.body) {
+      bulletSprite.body.enable = false;
+    }
+
+    // Wall impact particle effect (sparks/debris)
+    const impactEffect = this.add.particles(
+      bulletSprite.x,
+      bulletSprite.y,
+      'bullet',
+      {
+        speed: { min: 40, max: 100 },
+        scale: { start: 0.4, end: 0 },
+        lifespan: 200,
+        quantity: 6,
+        tint: [0xaaaaaa, 0x888888, 0x666666],
+        angle: { min: 0, max: 360 },
+      }
+    );
+    impactEffect.setDepth(bulletSprite.y + 10);
+    this.time.delayedCall(200, () => impactEffect.destroy());
   }
 
   private setupEvents(): void {
