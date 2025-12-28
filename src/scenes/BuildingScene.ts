@@ -640,6 +640,10 @@ export class BuildingScene extends Phaser.Scene {
   getEnemies(): Phaser.Physics.Arcade.Group {
     return this.enemies;
   }
+  
+  getPlayer(): Player {
+    return this.player;
+  }
 
   private handleBulletEnemyCollision(
     bullet: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile,
@@ -718,6 +722,9 @@ export class BuildingScene extends Phaser.Scene {
     // Exit building on E key
     const keyE = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
     keyE.on('down', () => this.tryExitBuilding());
+    
+    // Mobile interact event
+    this.events.on('mobileInteract', () => this.tryExitBuilding());
 
     // Enemy killed event - remove existing listener first to prevent duplicates
     if (this.enemyKilledHandler) {

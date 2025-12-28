@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { WeaponType } from '../weapons/IWeapon';
+import { MobileControls } from '../utils/MobileControls';
+import { Player } from '../entities/Player';
 
 export class UIScene extends Phaser.Scene {
   private healthBar!: Phaser.GameObjects.Graphics;
@@ -12,12 +14,21 @@ export class UIScene extends Phaser.Scene {
   private weaponText!: Phaser.GameObjects.Text;
   private score: number = 0;
   private gameOverContainer!: Phaser.GameObjects.Container;
+  
+  // Mobile controls
+  private mobileControls!: MobileControls;
+  private controlsHelpText!: Phaser.GameObjects.Text;
+  private lastWeaponSwitchTime: number = 0;
 
   constructor() {
     super({ key: 'UIScene' });
   }
 
   create(): void {
+    // Initialize mobile controls first
+    this.mobileControls = new MobileControls(this);
+    this.mobileControls.create();
+    
     this.createHealthBar();
     this.createArmorBar();
     this.createAmmoDisplay();
@@ -26,6 +37,9 @@ export class UIScene extends Phaser.Scene {
     this.createControls();
     this.createGameOverScreen();
     this.setupEvents();
+    
+    // Handle resize for responsive UI
+    this.scale.on('resize', this.handleResize, this);
   }
 
   private createHealthBar(): void {
@@ -199,6 +213,11 @@ export class UIScene extends Phaser.Scene {
       duration: 150,
       yoyo: true,
     });
+    
+    // Update mobile weapon icon
+    if (this.mobileControls && this.mobileControls.isEnabled()) {
+      this.mobileControls.setWeaponIcon(weaponType === WeaponType.GUN);
+    }
   }
 
   private showWeaponSwitchMessage(weaponType: WeaponType): void {
@@ -284,6 +303,11 @@ export class UIScene extends Phaser.Scene {
   }
 
   private createControls(): void {
+    // Don't show keyboard controls on mobile
+    if (this.mobileControls.isMobile()) {
+      return;
+    }
+    
     const x = 20;
     const y = this.cameras.main.height - 100;
 
@@ -292,9 +316,10 @@ export class UIScene extends Phaser.Scene {
       'WASD / Arrows - Move',
       'Mouse - Aim & Shoot',
       'E - Enter/Exit Buildings',
+      '1/2 or Scroll - Switch Weapon',
     ].join('\n');
 
-    this.add.text(x, y, controlsText, {
+    this.controlsHelpText = this.add.text(x, y, controlsText, {
       fontSize: '12px',
       color: '#888888',
       lineSpacing: 4,
@@ -347,9 +372,17 @@ export class UIScene extends Phaser.Scene {
     finalScoreText.setText(this.score.toString());
 
     this.gameOverContainer.setVisible(true);
+    
+    // Update restart text based on platform
+    const restartText = this.gameOverContainer.list[4] as Phaser.GameObjects.Text;
+    if (this.mobileControls.isMobile()) {
+      restartText.setText('Tap to Restart');
+    } else {
+      restartText.setText('Press R to Restart');
+    }
 
-    // Setup restart key
-    this.input.keyboard!.once('keydown-R', () => {
+    // Restart function
+    const doRestart = () => {
       this.score = 0;
       this.scoreText.setText('0');
       this.gameOverContainer.setVisible(false);
@@ -360,7 +393,18 @@ export class UIScene extends Phaser.Scene {
       this.scene.stop('CityScene');
       this.scene.stop('BuildingScene');
       this.scene.start('CityScene');
-    });
+    };
+
+    // Setup restart key (desktop)
+    this.input.keyboard!.once('keydown-R', doRestart);
+    
+    // Setup tap to restart (mobile)
+    if (this.mobileControls.isMobile()) {
+      // Delay to prevent accidental immediate restart
+      this.time.delayedCall(500, () => {
+        this.input.once('pointerdown', doRestart);
+      });
+    }
   }
 
   private setupEvents(): void {
@@ -409,5 +453,68 @@ export class UIScene extends Phaser.Scene {
 
   getScore(): number {
     return this.score;
+  }
+  
+  update(_time: number, _delta: number): void {
+    // Handle mobile controls
+    if (!this.mobileControls.isEnabled()) return;
+    
+    const inputState = this.mobileControls.getInputState();
+    
+    // Find active game scene (CityScene or BuildingScene)
+    const cityScene = this.scene.get('CityScene') as any;
+    const buildingScene = this.scene.get('BuildingScene') as any;
+    const activeScene = cityScene.scene.isActive() ? cityScene : 
+                       buildingScene.scene.isActive() ? buildingScene : null;
+    
+    if (!activeScene) return;
+    
+    // Get player from active scene
+    const player = activeScene.getPlayer?.() as Player;
+    if (!player) return;
+    
+    // Enable mobile mode and pass input to player
+    player.setMobileMode(true);
+    player.setMobileInput(inputState);
+    
+    // Handle weapon switch (with cooldown)
+    if (inputState.weaponSwitch && this.time.now - this.lastWeaponSwitchTime > 500) {
+      player.cycleWeapon();
+      this.lastWeaponSwitchTime = this.time.now;
+      this.mobileControls.resetOneShot();
+    }
+    
+    // Handle interact (E key equivalent)
+    if (inputState.interact) {
+      // Emit interact event that scenes can listen to
+      activeScene.events.emit('mobileInteract');
+      this.mobileControls.resetOneShot();
+    }
+  }
+  
+  private handleResize(gameSize: Phaser.Structs.Size): void {
+    // Reposition UI elements on resize
+    const width = gameSize.width;
+    const height = gameSize.height;
+    
+    // Update score position
+    if (this.scoreText) {
+      this.scoreText.setPosition(width - 20, 40);
+      // Find and update SCORE label too
+    }
+    
+    // Update controls text position (if not mobile)
+    if (this.controlsHelpText) {
+      this.controlsHelpText.setPosition(20, height - 100);
+    }
+    
+    // Update game over container position
+    if (this.gameOverContainer) {
+      this.gameOverContainer.setPosition(width / 2, height / 2);
+    }
+  }
+  
+  getMobileControls(): MobileControls {
+    return this.mobileControls;
   }
 }

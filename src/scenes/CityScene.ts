@@ -510,6 +510,10 @@ export class CityScene extends Phaser.Scene {
   getEnemies(): Phaser.Physics.Arcade.Group {
     return this.enemies;
   }
+  
+  getPlayer(): Player {
+    return this.player;
+  }
 
   private handleBulletEnemyCollision(
     bullet: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile,
@@ -587,6 +591,9 @@ export class CityScene extends Phaser.Scene {
     // Enter building on E key
     const keyE = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
     keyE.on('down', () => this.tryEnterBuilding());
+    
+    // Mobile interact event
+    this.events.on('mobileInteract', () => this.tryEnterBuilding());
 
     // Enemy killed event - store handler for cleanup
     this.enemyKilledHandler = (points: number) => {

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { WeaponManager } from '../managers/WeaponManager';
 import { IWeapon, WeaponType } from '../weapons/IWeapon';
 import { ArmorType } from './Armor';
+import { MobileInputState } from '../utils/MobileControls';
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
   private cursors: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -19,6 +20,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private lastAutoSwitch: number = 0;
   private autoSwitchCooldown: number = 1000;
   public lastDirection: Phaser.Math.Vector2 = new Phaser.Math.Vector2(1, 0);
+  
+  // Mobile input state
+  private mobileInput: MobileInputState | null = null;
+  private isMobileMode: boolean = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, 'player_right');
@@ -53,6 +58,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     // Setup weapon switching
     this.setupWeaponSwitching();
   }
+  
+  // Enable mobile input mode
+  setMobileMode(enabled: boolean): void {
+    this.isMobileMode = enabled;
+  }
+  
+  // Update mobile input state from MobileControls
+  setMobileInput(input: MobileInputState): void {
+    this.mobileInput = input;
+  }
 
   private setupWeaponSwitching(): void {
     // Number keys for weapon switching
@@ -81,16 +96,29 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private handleMovement(): void {
     const velocity = new Phaser.Math.Vector2(0, 0);
 
-    if (this.cursors.left.isDown || this.wasd.A.isDown) {
-      velocity.x = -1;
-    } else if (this.cursors.right.isDown || this.wasd.D.isDown) {
-      velocity.x = 1;
-    }
+    // Handle mobile input
+    if (this.isMobileMode && this.mobileInput) {
+      // Apply deadzone (ignore very small joystick movements)
+      const deadzone = 0.15;
+      if (Math.abs(this.mobileInput.moveX) > deadzone) {
+        velocity.x = this.mobileInput.moveX;
+      }
+      if (Math.abs(this.mobileInput.moveY) > deadzone) {
+        velocity.y = this.mobileInput.moveY;
+      }
+    } else {
+      // Keyboard input
+      if (this.cursors.left.isDown || this.wasd.A.isDown) {
+        velocity.x = -1;
+      } else if (this.cursors.right.isDown || this.wasd.D.isDown) {
+        velocity.x = 1;
+      }
 
-    if (this.cursors.up.isDown || this.wasd.W.isDown) {
-      velocity.y = -1;
-    } else if (this.cursors.down.isDown || this.wasd.S.isDown) {
-      velocity.y = 1;
+      if (this.cursors.up.isDown || this.wasd.W.isDown) {
+        velocity.y = -1;
+      } else if (this.cursors.down.isDown || this.wasd.S.isDown) {
+        velocity.y = 1;
+      }
     }
 
     velocity.normalize().scale(this.speed);
@@ -157,8 +185,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   private handleAttack(time: number): void {
-    const pointer = this.scene.input.activePointer;
-
     // Auto-switch to sword if gun has no ammo
     if (
       this.currentWeapon.getWeaponType() === WeaponType.GUN &&
@@ -172,9 +198,86 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       }
     }
 
+    // Handle mobile attack with auto-aim or joystick direction
+    if (this.isMobileMode && this.mobileInput) {
+      if (this.mobileInput.isAttacking && this.currentWeapon.canAttack(time)) {
+        // Create a virtual pointer for the attack direction
+        const virtualPointer = this.createVirtualPointer();
+        this.currentWeapon.attack(time, virtualPointer, this);
+      }
+      return;
+    }
+
+    // Desktop: mouse-based attack
+    const pointer = this.scene.input.activePointer;
     if (pointer.isDown && this.currentWeapon.canAttack(time)) {
       this.currentWeapon.attack(time, pointer, this);
     }
+  }
+  
+  // Create a virtual pointer for mobile attacks
+  private createVirtualPointer(): Phaser.Input.Pointer {
+    let targetX: number;
+    let targetY: number;
+    
+    // Try to get aim direction from joystick
+    if (this.mobileInput && (Math.abs(this.mobileInput.moveX) > 0.2 || Math.abs(this.mobileInput.moveY) > 0.2)) {
+      // Use joystick direction for aiming
+      const aimDistance = 200;
+      targetX = this.x + this.mobileInput.moveX * aimDistance;
+      targetY = this.y + this.mobileInput.moveY * aimDistance;
+    } else {
+      // Auto-aim at nearest enemy
+      const nearestEnemy = this.findNearestEnemy();
+      if (nearestEnemy) {
+        targetX = nearestEnemy.x;
+        targetY = nearestEnemy.y;
+      } else {
+        // Fall back to last direction
+        const aimDistance = 200;
+        targetX = this.x + this.lastDirection.x * aimDistance;
+        targetY = this.y + this.lastDirection.y * aimDistance;
+      }
+    }
+    
+    // Convert to screen coordinates (account for camera)
+    const camera = this.scene.cameras.main;
+    const worldPoint = new Phaser.Math.Vector2(targetX, targetY);
+    const screenX = worldPoint.x - camera.scrollX;
+    const screenY = worldPoint.y - camera.scrollY;
+    
+    // Create a mock pointer object
+    return {
+      x: screenX,
+      y: screenY,
+      worldX: targetX,
+      worldY: targetY,
+      isDown: true,
+    } as unknown as Phaser.Input.Pointer;
+  }
+  
+  // Find nearest enemy for auto-aim
+  private findNearestEnemy(): Phaser.Physics.Arcade.Sprite | null {
+    // Access enemies from the scene
+    const currentScene = this.scene as any;
+    const enemies = currentScene.enemies || currentScene.getEnemies?.();
+    
+    if (!enemies) return null;
+    
+    let nearestEnemy: Phaser.Physics.Arcade.Sprite | null = null;
+    let nearestDistance = 400; // Max auto-aim range
+    
+    enemies.getChildren().forEach((enemy: Phaser.Physics.Arcade.Sprite) => {
+      if (!enemy.active) return;
+      
+      const distance = Phaser.Math.Distance.Between(this.x, this.y, enemy.x, enemy.y);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestEnemy = enemy;
+      }
+    });
+    
+    return nearestEnemy;
   }
 
   switchWeapon(weaponType: WeaponType): void {
@@ -213,6 +316,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const currentIndex = weapons.indexOf(this.currentWeapon.getWeaponType());
     const prevIndex = (currentIndex - 1 + weapons.length) % weapons.length;
     this.switchWeapon(weapons[prevIndex]);
+  }
+  
+  // Public method to cycle weapons (used by mobile controls)
+  cycleWeapon(): void {
+    this.cycleWeaponNext();
   }
 
   private updateDepth(): void {
