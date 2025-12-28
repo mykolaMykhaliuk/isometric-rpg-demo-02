@@ -11,6 +11,12 @@ const config: Phaser.Types.Core.GameConfig = {
   height: 768,
   parent: 'game-container',
   backgroundColor: '#2d2d44',
+  scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+    width: 1024,
+    height: 768,
+  },
   physics: {
     default: 'arcade',
     arcade: {
@@ -24,6 +30,9 @@ const config: Phaser.Types.Core.GameConfig = {
   },
   pixelArt: false,
   antialias: true,
+  input: {
+    activePointers: 3, // Support multi-touch (joystick + buttons)
+  },
 };
 
 new Phaser.Game(config);

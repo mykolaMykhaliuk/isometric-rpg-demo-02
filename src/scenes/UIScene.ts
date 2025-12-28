@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { WeaponType } from '../weapons/IWeapon';
+import { VirtualJoystick } from '../utils/VirtualJoystick';
+import { TouchControls } from '../utils/TouchControls';
 
 export class UIScene extends Phaser.Scene {
   private healthBar!: Phaser.GameObjects.Graphics;
@@ -12,20 +14,40 @@ export class UIScene extends Phaser.Scene {
   private weaponText!: Phaser.GameObjects.Text;
   private score: number = 0;
   private gameOverContainer!: Phaser.GameObjects.Container;
+  
+  // Mobile controls
+  private joystick?: VirtualJoystick;
+  private touchControls?: TouchControls;
+  private isMobile: boolean = false;
 
   constructor() {
     super({ key: 'UIScene' });
   }
 
   create(): void {
+    // Detect mobile device
+    this.isMobile = this.sys.game.device.os.android || this.sys.game.device.os.iOS || 
+                    this.sys.game.device.os.iPad || this.sys.game.device.os.iPhone ||
+                    'ontouchstart' in window;
+    
     this.createHealthBar();
     this.createArmorBar();
     this.createAmmoDisplay();
     this.createWeaponDisplay();
     this.createScoreDisplay();
-    this.createControls();
+    
+    // Show appropriate controls
+    if (this.isMobile) {
+      this.createMobileControls();
+    } else {
+      this.createControls();
+    }
+    
     this.createGameOverScreen();
     this.setupEvents();
+    
+    // Handle orientation changes
+    this.scale.on('resize', this.handleResize, this);
   }
 
   private createHealthBar(): void {
@@ -292,13 +314,77 @@ export class UIScene extends Phaser.Scene {
       'WASD / Arrows - Move',
       'Mouse - Aim & Shoot',
       'E - Enter/Exit Buildings',
+      '1/2 or Mouse Wheel - Switch Weapon',
     ].join('\n');
 
     this.add.text(x, y, controlsText, {
       fontSize: '12px',
       color: '#888888',
       lineSpacing: 4,
-    });
+    }).setScrollFactor(0);
+  }
+
+  private createMobileControls(): void {
+    const width = this.cameras.main.width;
+    const height = this.cameras.main.height;
+    
+    // Create virtual joystick (bottom left)
+    this.joystick = new VirtualJoystick(this, 100, height - 100);
+    
+    // Create touch controls (bottom right)
+    this.touchControls = new TouchControls(this);
+    
+    // Attack button (fire/slash)
+    this.touchControls.createButton(
+      'attack',
+      width - 80,
+      height - 100,
+      70,
+      70,
+      '⚔️',
+      () => {},
+      0xff4444
+    );
+    
+    // Weapon switch button
+    this.touchControls.createButton(
+      'weapon',
+      width - 80,
+      height - 190,
+      60,
+      60,
+      '🔄',
+      () => {},
+      0x4488ff
+    );
+    
+    // Building interaction button (shown only near doors)
+    this.touchControls.createButton(
+      'interact',
+      width / 2,
+      height - 80,
+      80,
+      60,
+      'E',
+      () => {},
+      0x44ff44
+    );
+    
+    // Initially hide interact button
+    this.touchControls.setButtonVisible('interact', false);
+  }
+
+  private handleResize(gameSize: Phaser.Structs.Size): void {
+    const width = gameSize.width;
+    const height = gameSize.height;
+    
+    if (this.isMobile && this.joystick && this.touchControls) {
+      // Reposition mobile controls
+      this.joystick.setPosition(100, height - 100);
+      this.touchControls.setButtonPosition('attack', width - 80, height - 100);
+      this.touchControls.setButtonPosition('weapon', width - 80, height - 190);
+      this.touchControls.setButtonPosition('interact', width / 2, height - 80);
+    }
   }
 
   private createGameOverScreen(): void {
@@ -409,5 +495,68 @@ export class UIScene extends Phaser.Scene {
 
   getScore(): number {
     return this.score;
+  }
+
+  update(): void {
+    if (!this.isMobile || !this.joystick || !this.touchControls) return;
+
+    // Get the current game scene (CityScene or BuildingScene)
+    const cityScene = this.scene.get('CityScene');
+    const buildingScene = this.scene.get('BuildingScene');
+    const activeScene = this.scene.isActive('CityScene') ? cityScene : 
+                       this.scene.isActive('BuildingScene') ? buildingScene : null;
+    
+    if (!activeScene) return;
+
+    // Get player from active scene
+    const player = (activeScene as any).player;
+    if (!player) return;
+
+    // Update player with joystick input
+    player.setJoystickForce(this.joystick.force);
+
+    // Handle attack button
+    const isAttacking = this.touchControls.isButtonPressed('attack');
+    player.setTouchAttackActive(isAttacking);
+
+    // Update aim position based on attack button or player direction
+    if (isAttacking) {
+      // Aim in the direction of player's last movement or use default
+      const aimDistance = 150;
+      const aimX = player.x + player.lastDirection.x * aimDistance;
+      const aimY = player.y + player.lastDirection.y * aimDistance;
+      player.setTouchAimPosition(new Phaser.Math.Vector2(aimX, aimY));
+    } else {
+      player.setTouchAimPosition(null);
+    }
+
+    // Handle weapon switch button press (only trigger once per press)
+    const weaponButton = this.touchControls.getButton('weapon');
+    if (weaponButton && weaponButton.isPressed && !weaponButton.container.getData('wasPressed')) {
+      // Toggle weapon
+      const currentWeapon = player.getCurrentWeaponType();
+      const newWeapon = currentWeapon === WeaponType.GUN ? WeaponType.SWORD : WeaponType.GUN;
+      player.switchWeapon(newWeapon);
+      weaponButton.container.setData('wasPressed', true);
+    } else if (weaponButton && !weaponButton.isPressed) {
+      weaponButton.container.setData('wasPressed', false);
+    }
+
+    // Handle interact button (building entry/exit)
+    const interactButton = this.touchControls.getButton('interact');
+    if (interactButton) {
+      // Check if player is near a door
+      const isNearDoor = (activeScene as any).isPlayerNearDoor?.() || false;
+      this.touchControls.setButtonVisible('interact', isNearDoor);
+
+      // Handle interaction
+      if (interactButton.isPressed && !interactButton.container.getData('wasPressed')) {
+        (activeScene as any).tryEnterBuilding?.();
+        (activeScene as any).tryExitBuilding?.();
+        interactButton.container.setData('wasPressed', true);
+      } else if (!interactButton.isPressed) {
+        interactButton.container.setData('wasPressed', false);
+      }
+    }
   }
 }

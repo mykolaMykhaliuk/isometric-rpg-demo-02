@@ -630,7 +630,7 @@ export class CityScene extends Phaser.Scene {
     }
   }
 
-  private tryEnterBuilding(): void {
+  tryEnterBuilding(): void {
     for (const door of this.doors) {
       const doorIso = cartToIso(door.tileX, door.tileY);
       const doorScreenX = doorIso.x + this.offsetX;
@@ -648,6 +648,26 @@ export class CityScene extends Phaser.Scene {
         return;
       }
     }
+  }
+
+  isPlayerNearDoor(): boolean {
+    for (const door of this.doors) {
+      const doorIso = cartToIso(door.tileX, door.tileY);
+      const doorScreenX = doorIso.x + this.offsetX;
+      const doorScreenY = doorIso.y + this.offsetY;
+
+      const distance = Phaser.Math.Distance.Between(
+        this.player.x,
+        this.player.y,
+        doorScreenX,
+        doorScreenY
+      );
+
+      if (distance < 40) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private enterBuilding(buildingId: number): void {

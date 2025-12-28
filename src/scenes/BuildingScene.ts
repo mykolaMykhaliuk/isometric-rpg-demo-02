@@ -851,7 +851,7 @@ export class BuildingScene extends Phaser.Scene {
     this.portfolioTexts.push(instruction);
   }
 
-  private tryExitBuilding(): void {
+  tryExitBuilding(): void {
     const distance = Phaser.Math.Distance.Between(
       this.player.x,
       this.player.y,
@@ -868,6 +868,16 @@ export class BuildingScene extends Phaser.Scene {
         currentWeapon: this.player.getCurrentWeaponType(),
       });
     }
+  }
+
+  isPlayerNearDoor(): boolean {
+    const distance = Phaser.Math.Distance.Between(
+      this.player.x,
+      this.player.y,
+      this.exitPosition.x,
+      this.exitPosition.y
+    );
+    return distance < 40;
   }
 
   update(time: number, delta: number): void {

@@ -19,6 +19,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private lastAutoSwitch: number = 0;
   private autoSwitchCooldown: number = 1000;
   public lastDirection: Phaser.Math.Vector2 = new Phaser.Math.Vector2(1, 0);
+  
+  // Mobile control support
+  private joystickForce: Phaser.Math.Vector2 = new Phaser.Math.Vector2(0, 0);
+  private touchAttackActive: boolean = false;
+  private touchAimPosition: Phaser.Math.Vector2 | null = null;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, 'player_right');
@@ -81,6 +86,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private handleMovement(): void {
     const velocity = new Phaser.Math.Vector2(0, 0);
 
+    // Keyboard input
     if (this.cursors.left.isDown || this.wasd.A.isDown) {
       velocity.x = -1;
     } else if (this.cursors.right.isDown || this.wasd.D.isDown) {
@@ -91,6 +97,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       velocity.y = -1;
     } else if (this.cursors.down.isDown || this.wasd.S.isDown) {
       velocity.y = 1;
+    }
+
+    // Joystick input (overrides keyboard if active)
+    if (this.joystickForce.length() > 0.1) {
+      velocity.x = this.joystickForce.x;
+      velocity.y = this.joystickForce.y;
     }
 
     velocity.normalize().scale(this.speed);
@@ -172,8 +184,23 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       }
     }
 
-    if (pointer.isDown && this.currentWeapon.canAttack(time)) {
-      this.currentWeapon.attack(time, pointer, this);
+    // Check for touch attack or mouse attack
+    const shouldAttack = this.touchAttackActive || pointer.isDown;
+    
+    if (shouldAttack && this.currentWeapon.canAttack(time)) {
+      // Use touch aim position if available, otherwise use pointer
+      if (this.touchAimPosition) {
+        // Create a temporary pointer-like object for weapon attack
+        const virtualPointer = {
+          x: this.touchAimPosition.x,
+          y: this.touchAimPosition.y,
+          worldX: this.touchAimPosition.x,
+          worldY: this.touchAimPosition.y,
+        };
+        this.currentWeapon.attack(time, virtualPointer as any, this);
+      } else {
+        this.currentWeapon.attack(time, pointer, this);
+      }
     }
   }
 
@@ -371,5 +398,18 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
     this.scene.events.emit('healthChanged', this.health, this.maxHealth);
     this.scene.events.emit('armorChanged', this.armor, this.maxArmor);
+  }
+
+  // Mobile control methods
+  setJoystickForce(force: Phaser.Math.Vector2): void {
+    this.joystickForce.copy(force);
+  }
+
+  setTouchAttackActive(active: boolean): void {
+    this.touchAttackActive = active;
+  }
+
+  setTouchAimPosition(position: Phaser.Math.Vector2 | null): void {
+    this.touchAimPosition = position;
   }
 }
