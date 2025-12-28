@@ -719,6 +719,10 @@ export class BuildingScene extends Phaser.Scene {
     const keyE = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
     keyE.on('down', () => this.tryExitBuilding());
 
+    // Mobile interact
+    const uiScene = this.scene.get('UIScene');
+    uiScene.events.on('mobileInteract', this.tryExitBuilding, this);
+
     // Enemy killed event - remove existing listener first to prevent duplicates
     if (this.enemyKilledHandler) {
       this.events.off('enemyKilled', this.enemyKilledHandler);
@@ -882,6 +886,11 @@ export class BuildingScene extends Phaser.Scene {
 
   shutdown(): void {
     // Clean up event listeners to prevent accumulation on scene restart
+    const uiScene = this.scene.get('UIScene');
+    if (uiScene) {
+      uiScene.events.off('mobileInteract', this.tryExitBuilding, this);
+    }
+
     if (this.enemyKilledHandler) {
       this.events.off('enemyKilled', this.enemyKilledHandler);
       this.enemyKilledHandler = undefined;

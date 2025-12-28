@@ -17,15 +17,20 @@ export class Sword implements IWeapon {
     this.scene = scene;
   }
 
-  attack(time: number, pointer: Phaser.Input.Pointer, player: Player): void {
+  attack(time: number, pointer: Phaser.Input.Pointer, player: Player, explicitDirection?: Phaser.Math.Vector2): void {
     this.attacking = true;
     this.currentSwingHitEnemies.clear();
 
-    const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
-    const direction = new Phaser.Math.Vector2(
-      worldPoint.x - player.x,
-      worldPoint.y - player.y
-    ).normalize();
+    let direction: Phaser.Math.Vector2;
+    if (explicitDirection) {
+      direction = explicitDirection.clone().normalize();
+    } else {
+      const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+      direction = new Phaser.Math.Vector2(
+        worldPoint.x - player.x,
+        worldPoint.y - player.y
+      ).normalize();
+    }
 
     const aimAngle = Math.atan2(direction.y, direction.x);
 

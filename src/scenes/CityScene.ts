@@ -588,6 +588,10 @@ export class CityScene extends Phaser.Scene {
     const keyE = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
     keyE.on('down', () => this.tryEnterBuilding());
 
+    // Mobile interact
+    const uiScene = this.scene.get('UIScene');
+    uiScene.events.on('mobileInteract', this.tryEnterBuilding, this);
+
     // Enemy killed event - store handler for cleanup
     this.enemyKilledHandler = (points: number) => {
       const uiScene = this.scene.get('UIScene');
@@ -604,7 +608,6 @@ export class CityScene extends Phaser.Scene {
     this.events.on('playerDied', this.playerDiedHandler);
 
     // Listen for score updates from UIScene - store handler for cleanup
-    const uiScene = this.scene.get('UIScene');
     this.scoreUpdatedHandler = (newScore: number) => {
       this.updateDifficultyBasedOnScore(newScore);
     };
@@ -613,6 +616,11 @@ export class CityScene extends Phaser.Scene {
 
   shutdown(): void {
     // Clean up event handlers to prevent duplication on scene restart
+    const uiScene = this.scene.get('UIScene');
+    if (uiScene) {
+      uiScene.events.off('mobileInteract', this.tryEnterBuilding, this);
+    }
+
     if (this.enemyKilledHandler) {
       this.events.off('enemyKilled', this.enemyKilledHandler);
       this.enemyKilledHandler = undefined;

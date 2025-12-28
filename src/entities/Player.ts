@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { WeaponManager } from '../managers/WeaponManager';
 import { IWeapon, WeaponType } from '../weapons/IWeapon';
 import { ArmorType } from './Armor';
+import { UIScene } from '../scenes/UIScene';
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
   private cursors: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -19,6 +20,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private lastAutoSwitch: number = 0;
   private autoSwitchCooldown: number = 1000;
   public lastDirection: Phaser.Math.Vector2 = new Phaser.Math.Vector2(1, 0);
+  private handleMobileSwitch: (() => void) | undefined;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, 'player_right');
@@ -62,6 +64,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     key1.on('down', () => this.switchWeapon(WeaponType.GUN));
     key2.on('down', () => this.switchWeapon(WeaponType.SWORD));
 
+    const uiScene = this.scene.scene.get('UIScene') as UIScene;
+    if (uiScene) {
+      this.handleMobileSwitch = () => this.cycleWeaponNext();
+      uiScene.events.on('mobileSwitchWeapon', this.handleMobileSwitch);
+    }
+
     // Mouse wheel for weapon cycling
     this.scene.input.on('wheel', (_pointer: any, _gameObjects: any, _deltaX: number, deltaY: number, _deltaZ: number) => {
       if (deltaY > 0) {
@@ -80,6 +88,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   private handleMovement(): void {
     const velocity = new Phaser.Math.Vector2(0, 0);
+
+    const uiScene = this.scene.scene.get('UIScene') as UIScene;
+    if (uiScene) {
+      const mobileVector = uiScene.getMobileMoveVector();
+      if (mobileVector.length() > 0) {
+        velocity.add(mobileVector);
+      }
+    }
 
     if (this.cursors.left.isDown || this.wasd.A.isDown) {
       velocity.x = -1;
@@ -172,8 +188,22 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       }
     }
 
-    if (pointer.isDown && this.currentWeapon.canAttack(time)) {
-      this.currentWeapon.attack(time, pointer, this);
+    const uiScene = this.scene.scene.get('UIScene') as UIScene;
+    const isMobileAttack = uiScene?.isMobileAttackDown() ?? false;
+    const isUsingMobile = uiScene?.isUsingMobileControls() ?? false;
+
+    let shouldAttack = false;
+    let explicitDirection: Phaser.Math.Vector2 | undefined;
+
+    if (isMobileAttack) {
+      shouldAttack = true;
+      explicitDirection = this.lastDirection.clone();
+    } else if (pointer.isDown && !isUsingMobile) {
+      shouldAttack = true;
+    }
+
+    if (shouldAttack && this.currentWeapon.canAttack(time)) {
+      this.currentWeapon.attack(time, pointer, this, explicitDirection);
     }
   }
 
@@ -371,5 +401,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
     this.scene.events.emit('healthChanged', this.health, this.maxHealth);
     this.scene.events.emit('armorChanged', this.armor, this.maxArmor);
+  }
+
+  destroy(fromScene?: boolean): void {
+    const uiScene = this.scene.scene.get('UIScene') as UIScene;
+    if (uiScene && this.handleMobileSwitch) {
+      uiScene.events.off('mobileSwitchWeapon', this.handleMobileSwitch);
+    }
+    super.destroy(fromScene);
   }
 }

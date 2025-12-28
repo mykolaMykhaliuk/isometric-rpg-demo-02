@@ -21,9 +21,9 @@ export class Gun implements IWeapon {
     });
   }
 
-  attack(time: number, pointer: Phaser.Input.Pointer, player: Player): void {
+  attack(time: number, pointer: Phaser.Input.Pointer, player: Player, direction?: Phaser.Math.Vector2): void {
     this.attacking = true;
-    this.shoot(pointer, player);
+    this.shoot(pointer, player, direction);
     this.shootCooldown = time + this.shootDelay;
     this.ammo--;
     this.scene.events.emit('ammoChanged', this.ammo, this.maxAmmo, WeaponType.GUN);
@@ -34,7 +34,7 @@ export class Gun implements IWeapon {
     });
   }
 
-  private shoot(pointer: Phaser.Input.Pointer, player: Player): void {
+  private shoot(pointer: Phaser.Input.Pointer, player: Player, explicitDirection?: Phaser.Math.Vector2): void {
     const bullet = this.bullets.get(player.x, player.y, 'bullet') as Phaser.Physics.Arcade.Sprite;
 
     if (bullet) {
@@ -46,11 +46,16 @@ export class Gun implements IWeapon {
         bullet.body.enable = true;
       }
 
-      const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
-      const direction = new Phaser.Math.Vector2(
-        worldPoint.x - player.x,
-        worldPoint.y - player.y
-      ).normalize();
+      let direction: Phaser.Math.Vector2;
+      if (explicitDirection) {
+        direction = explicitDirection.clone().normalize();
+      } else {
+        const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+        direction = new Phaser.Math.Vector2(
+          worldPoint.x - player.x,
+          worldPoint.y - player.y
+        ).normalize();
+      }
 
       bullet.setVelocity(direction.x * 400, direction.y * 400);
 

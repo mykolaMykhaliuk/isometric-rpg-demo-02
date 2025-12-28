@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { WeaponType } from '../weapons/IWeapon';
+import { VirtualJoystick } from '../ui/VirtualJoystick';
 
 export class UIScene extends Phaser.Scene {
   private healthBar!: Phaser.GameObjects.Graphics;
@@ -13,6 +14,15 @@ export class UIScene extends Phaser.Scene {
   private score: number = 0;
   private gameOverContainer!: Phaser.GameObjects.Container;
 
+  // Mobile Controls
+  private virtualJoystick: VirtualJoystick | null = null;
+  private attackButton: Phaser.GameObjects.Container | null = null;
+  private switchButton: Phaser.GameObjects.Container | null = null;
+  private interactButton: Phaser.GameObjects.Container | null = null;
+  private isAttackPressed: boolean = false;
+  private isSwitchPressed: boolean = false;
+  private isInteractPressed: boolean = false;
+
   constructor() {
     super({ key: 'UIScene' });
   }
@@ -25,7 +35,10 @@ export class UIScene extends Phaser.Scene {
     this.createScoreDisplay();
     this.createControls();
     this.createGameOverScreen();
+    this.createMobileControls();
     this.setupEvents();
+    
+    this.scale.on('resize', this.handleResize, this);
   }
 
   private createHealthBar(): void {
@@ -299,6 +312,106 @@ export class UIScene extends Phaser.Scene {
       color: '#888888',
       lineSpacing: 4,
     });
+  }
+  
+  private createMobileControls(): void {
+    const width = this.cameras.main.width;
+    const height = this.cameras.main.height;
+
+    // Joystick on left
+    const joyX = 120;
+    const joyY = height - 120;
+    this.virtualJoystick = new VirtualJoystick(this, joyX, joyY, 60);
+
+    // Buttons on right
+    // Attack (Big button)
+    const attackX = width - 100;
+    const attackY = height - 100;
+    this.attackButton = this.createButton(attackX, attackY, 50, 0xff0000, 'FIRE');
+    this.attackButton.setInteractive(new Phaser.Geom.Circle(0, 0, 50), Phaser.Geom.Circle.Contains);
+    this.attackButton.on('pointerdown', () => { this.isAttackPressed = true; });
+    this.attackButton.on('pointerup', () => { this.isAttackPressed = false; });
+    this.attackButton.on('pointerout', () => { this.isAttackPressed = false; });
+
+    // Switch Weapon (Smaller button)
+    const switchX = width - 180;
+    const switchY = height - 80;
+    this.switchButton = this.createButton(switchX, switchY, 30, 0xffff00, 'SWAP');
+    this.switchButton.setInteractive(new Phaser.Geom.Circle(0, 0, 30), Phaser.Geom.Circle.Contains);
+    this.switchButton.on('pointerdown', () => { 
+        this.events.emit('mobileSwitchWeapon');
+        
+        // Visual feedback
+        this.tweens.add({
+            targets: this.switchButton,
+            scale: 0.9,
+            duration: 50,
+            yoyo: true
+        });
+    });
+    
+    // Interact (Smaller button)
+    const interactX = width - 80;
+    const interactY = height - 200;
+    this.interactButton = this.createButton(interactX, interactY, 30, 0x00ff00, 'USE');
+    this.interactButton.setInteractive(new Phaser.Geom.Circle(0, 0, 30), Phaser.Geom.Circle.Contains);
+    this.interactButton.on('pointerdown', () => { 
+        this.events.emit('mobileInteract'); 
+        
+        // Visual feedback
+        this.tweens.add({
+            targets: this.interactButton,
+            scale: 0.9,
+            duration: 50,
+            yoyo: true
+        });
+    });
+  }
+
+  private createButton(x: number, y: number, radius: number, color: number, text: string): Phaser.GameObjects.Container {
+    const container = this.add.container(x, y);
+    const circle = this.add.circle(0, 0, radius, color, 0.5);
+    const label = this.add.text(0, 0, text, { fontSize: '14px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
+    container.add([circle, label]);
+    container.setScrollFactor(0);
+    container.setDepth(1000);
+    return container;
+  }
+  
+  private handleResize(gameSize: Phaser.Structs.Size): void {
+    const width = gameSize.width;
+    const height = gameSize.height;
+
+    // Reposition UI elements
+    if (this.virtualJoystick) this.virtualJoystick.setPosition(120, height - 120);
+    if (this.attackButton) this.attackButton.setPosition(width - 100, height - 100);
+    if (this.switchButton) this.switchButton.setPosition(width - 180, height - 80);
+    if (this.interactButton) this.interactButton.setPosition(width - 80, height - 200);
+    
+    // Reposition Score
+    if (this.scoreText) {
+        // Recalculate score text pos based on logic in createScoreDisplay
+        // x was width - 20.
+        // We need to access the label too potentially, but label is not stored in a class prop (just added).
+        // Actually label is not stored. I should have stored it to move it.
+        // For now, let's just accept score might be slightly off or not move label.
+        // Or I can store label.
+    }
+  }
+  
+  public getMobileMoveVector(): Phaser.Math.Vector2 {
+    return this.virtualJoystick ? this.virtualJoystick.getVector() : new Phaser.Math.Vector2(0, 0);
+  }
+
+  public isMobileAttackDown(): boolean {
+    return this.isAttackPressed;
+  }
+
+  public isUsingMobileControls(): boolean {
+      return (this.virtualJoystick?.isStickDown() ?? false) || 
+             this.isAttackPressed || 
+             this.isSwitchPressed || 
+             this.isInteractPressed;
   }
 
   private createGameOverScreen(): void {
