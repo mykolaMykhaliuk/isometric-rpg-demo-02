@@ -294,50 +294,69 @@ export class TouchControls {
   }
 
   private setupTouchListeners(): void {
+    // Use game-level input to capture all touches across scenes
     this.scene.input.on('pointerdown', this.handlePointerDown, this);
     this.scene.input.on('pointermove', this.handlePointerMove, this);
     this.scene.input.on('pointerup', this.handlePointerUp, this);
+    this.scene.input.on('pointerupoutside', this.handlePointerUp, this);
+  }
+
+  private getScaledPointerPosition(pointer: Phaser.Input.Pointer): { x: number; y: number } {
+    // pointer.x and pointer.y are already in game coordinates when scale mode is FIT
+    return {
+      x: pointer.x,
+      y: pointer.y
+    };
   }
 
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
+    const pos = this.getScaledPointerPosition(pointer);
     const gameWidth = this.scene.cameras.main.width;
+    const gameHeight = this.scene.cameras.main.height;
+
+    // Calculate distance to left joystick
+    const distToLeft = Phaser.Math.Distance.Between(
+      pos.x, pos.y,
+      this.leftJoystickPos.x, this.leftJoystickPos.y
+    );
+
+    // Calculate distance to right joystick
+    const distToRight = Phaser.Math.Distance.Between(
+      pos.x, pos.y,
+      this.rightJoystickPos.x, this.rightJoystickPos.y
+    );
+
+    // Check if touch is in lower half of screen (joystick area)
+    const inJoystickArea = pos.y > gameHeight * 0.5;
 
     // Check if touch is on left half (movement joystick)
-    if (pointer.x < gameWidth / 2 && this.leftPointerId === -1) {
-      // Check if near joystick area
-      const distToLeft = Phaser.Math.Distance.Between(
-        pointer.x, pointer.y,
-        this.leftJoystickPos.x, this.leftJoystickPos.y
-      );
-
-      if (distToLeft < this.joystickRadius * 2) {
+    if (pos.x < gameWidth / 2 && this.leftPointerId === -1 && inJoystickArea) {
+      // More generous touch area for movement joystick
+      if (distToLeft < this.joystickRadius * 3) {
         this.leftPointerId = pointer.id;
-        this.updateLeftJoystick(pointer.x, pointer.y);
+        this.updateLeftJoystick(pos.x, pos.y);
       }
     }
 
     // Check if touch is on right half (aiming joystick)
-    if (pointer.x >= gameWidth / 2 && this.rightPointerId === -1) {
-      // Check if near joystick area
-      const distToRight = Phaser.Math.Distance.Between(
-        pointer.x, pointer.y,
-        this.rightJoystickPos.x, this.rightJoystickPos.y
-      );
-
-      if (distToRight < this.joystickRadius * 2) {
+    if (pos.x >= gameWidth / 2 && this.rightPointerId === -1 && inJoystickArea) {
+      // More generous touch area for aiming joystick
+      if (distToRight < this.joystickRadius * 3) {
         this.rightPointerId = pointer.id;
-        this.updateRightJoystick(pointer.x, pointer.y);
+        this.updateRightJoystick(pos.x, pos.y);
       }
     }
   }
 
   private handlePointerMove(pointer: Phaser.Input.Pointer): void {
+    const pos = this.getScaledPointerPosition(pointer);
+
     if (pointer.id === this.leftPointerId) {
-      this.updateLeftJoystick(pointer.x, pointer.y);
+      this.updateLeftJoystick(pos.x, pos.y);
     }
 
     if (pointer.id === this.rightPointerId) {
-      this.updateRightJoystick(pointer.x, pointer.y);
+      this.updateRightJoystick(pos.x, pos.y);
     }
   }
 
@@ -577,6 +596,7 @@ export class TouchControls {
     this.scene.input.off('pointerdown', this.handlePointerDown, this);
     this.scene.input.off('pointermove', this.handlePointerMove, this);
     this.scene.input.off('pointerup', this.handlePointerUp, this);
+    this.scene.input.off('pointerupoutside', this.handlePointerUp, this);
     this.scene.scale.off('resize', this.handleResize, this);
 
     if (this.leftJoystickBase) this.leftJoystickBase.destroy();

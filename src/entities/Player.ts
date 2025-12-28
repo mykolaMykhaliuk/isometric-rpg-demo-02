@@ -170,8 +170,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   private handleAttack(time: number): void {
-    const pointer = this.scene.input.activePointer;
-
     // Auto-switch to sword if gun has no ammo
     if (
       this.currentWeapon.getWeaponType() === WeaponType.GUN &&
@@ -185,17 +183,21 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       }
     }
 
-    // Handle touch shooting
-    if (this.useTouchControls && this.isTouchShooting && this.touchAimDirection) {
-      if (this.currentWeapon.canAttack(time)) {
-        // Create a virtual pointer for touch aiming
-        const virtualPointer = this.createVirtualPointer();
-        this.currentWeapon.attack(time, virtualPointer, this);
+    // Handle touch shooting - only shoot when touch aim joystick triggers it
+    if (this.useTouchControls) {
+      if (this.isTouchShooting && this.touchAimDirection) {
+        if (this.currentWeapon.canAttack(time)) {
+          // Create a virtual pointer for touch aiming
+          const virtualPointer = this.createVirtualPointer();
+          this.currentWeapon.attack(time, virtualPointer, this);
+        }
       }
+      // Don't use pointer.isDown when touch controls are enabled
       return;
     }
 
-    // Handle mouse/pointer shooting
+    // Handle mouse/pointer shooting (only when not using touch controls)
+    const pointer = this.scene.input.activePointer;
     if (pointer.isDown && this.currentWeapon.canAttack(time)) {
       this.currentWeapon.attack(time, pointer, this);
     }

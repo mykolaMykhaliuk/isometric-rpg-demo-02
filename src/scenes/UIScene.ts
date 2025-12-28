@@ -467,15 +467,19 @@ export class UIScene extends Phaser.Scene {
 
   private emitToActiveScene(event: string, ...args: any[]): void {
     // Emit to CityScene if it's active
-    const cityScene = this.scene.get('CityScene');
-    if (cityScene && cityScene.scene.isActive()) {
-      cityScene.events.emit(event, ...args);
+    if (this.scene.isActive('CityScene')) {
+      const cityScene = this.scene.get('CityScene');
+      if (cityScene) {
+        cityScene.events.emit(event, ...args);
+      }
     }
 
     // Emit to BuildingScene if it's active
-    const buildingScene = this.scene.get('BuildingScene');
-    if (buildingScene && buildingScene.scene.isActive()) {
-      buildingScene.events.emit(event, ...args);
+    if (this.scene.isActive('BuildingScene')) {
+      const buildingScene = this.scene.get('BuildingScene');
+      if (buildingScene) {
+        buildingScene.events.emit(event, ...args);
+      }
     }
   }
 
