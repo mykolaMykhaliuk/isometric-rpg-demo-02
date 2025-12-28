@@ -870,6 +870,14 @@ export class BuildingScene extends Phaser.Scene {
     }
   }
 
+  getPlayer(): Player {
+    return this.player;
+  }
+
+  interact(): void {
+    this.tryExitBuilding();
+  }
+
   update(time: number, delta: number): void {
     this.player.update(time, delta);
 

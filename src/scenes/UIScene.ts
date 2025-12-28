@@ -12,6 +12,17 @@ export class UIScene extends Phaser.Scene {
   private weaponText!: Phaser.GameObjects.Text;
   private score: number = 0;
   private gameOverContainer!: Phaser.GameObjects.Container;
+  private touchControlsContainer?: Phaser.GameObjects.Container;
+  private moveJoyBase?: Phaser.GameObjects.Arc;
+  private moveJoyThumb?: Phaser.GameObjects.Arc;
+  private aimJoyBase?: Phaser.GameObjects.Arc;
+  private aimJoyThumb?: Phaser.GameObjects.Arc;
+  private moveJoyPointerId: number | null = null;
+  private aimJoyPointerId: number | null = null;
+  private moveVector: Phaser.Math.Vector2 = new Phaser.Math.Vector2(0, 0);
+  private aimVector: Phaser.Math.Vector2 = new Phaser.Math.Vector2(1, 0);
+  private aimIsActive: boolean = false;
+  private touchControlsEnabled: boolean = false;
 
   constructor() {
     super({ key: 'UIScene' });
@@ -26,6 +37,7 @@ export class UIScene extends Phaser.Scene {
     this.createControls();
     this.createGameOverScreen();
     this.setupEvents();
+    this.setupTouchControlsIfSupported();
   }
 
   private createHealthBar(): void {
@@ -287,18 +299,215 @@ export class UIScene extends Phaser.Scene {
     const x = 20;
     const y = this.cameras.main.height - 100;
 
-    const controlsText = [
-      'Controls:',
-      'WASD / Arrows - Move',
-      'Mouse - Aim & Shoot',
-      'E - Enter/Exit Buildings',
-    ].join('\n');
+    const isTouch = this.sys.game.device.input.touch;
+    const controlsText = isTouch
+      ? [
+          'Touch controls:',
+          'Left stick - Move',
+          'Right stick - Aim/Fire',
+          'USE - Enter/Exit',
+          'SWAP - Weapon',
+        ].join('\n')
+      : [
+          'Controls:',
+          'WASD / Arrows - Move',
+          'Mouse - Aim & Shoot',
+          'E - Enter/Exit Buildings',
+        ].join('\n');
 
     this.add.text(x, y, controlsText, {
       fontSize: '12px',
       color: '#888888',
       lineSpacing: 4,
     });
+  }
+
+  private getActiveGameScene(): Phaser.Scene | null {
+    const city = this.scene.get('CityScene');
+    if (city && this.scene.isActive('CityScene')) return city;
+    const building = this.scene.get('BuildingScene');
+    if (building && this.scene.isActive('BuildingScene')) return building;
+    return null;
+  }
+
+  private setupTouchControlsIfSupported(): void {
+    if (!this.sys.game.device.input.touch) return;
+    this.touchControlsEnabled = true;
+
+    // Allow multi-touch (movement + aiming simultaneously).
+    this.input.addPointer(2);
+
+    this.touchControlsContainer = this.add.container(0, 0).setDepth(2000);
+
+    const w = this.cameras.main.width;
+    const h = this.cameras.main.height;
+    const margin = 95;
+    const baseRadius = 55;
+    const thumbRadius = 25;
+
+    // Left (movement) joystick.
+    const moveX = margin;
+    const moveY = h - margin;
+    this.moveJoyBase = this.add.circle(moveX, moveY, baseRadius, 0x000000, 0.25).setScrollFactor(0);
+    this.moveJoyBase.setStrokeStyle(2, 0xffffff, 0.35);
+    this.moveJoyThumb = this.add.circle(moveX, moveY, thumbRadius, 0xffffff, 0.35).setScrollFactor(0);
+    this.moveJoyThumb.setStrokeStyle(2, 0xffffff, 0.5);
+
+    // Right (aim) joystick. Also drives auto-fire while held.
+    const aimX = w - margin;
+    const aimY = h - margin;
+    this.aimJoyBase = this.add.circle(aimX, aimY, baseRadius, 0x000000, 0.25).setScrollFactor(0);
+    this.aimJoyBase.setStrokeStyle(2, 0xffffff, 0.35);
+    this.aimJoyThumb = this.add.circle(aimX, aimY, thumbRadius, 0xff5555, 0.45).setScrollFactor(0);
+    this.aimJoyThumb.setStrokeStyle(2, 0xffaaaa, 0.7);
+
+    // Buttons (right side, above aim stick).
+    const buttonWidth = 110;
+    const buttonHeight = 50;
+    const buttonY = aimY - 95;
+
+    const swapBtn = this.add.rectangle(aimX - 65, buttonY, buttonWidth, buttonHeight, 0x222222, 0.7).setScrollFactor(0);
+    swapBtn.setStrokeStyle(2, 0xffffff, 0.4);
+    swapBtn.setInteractive({ useHandCursor: false });
+    const swapText = this.add
+      .text(aimX - 65, buttonY, 'SWAP', { fontSize: '16px', color: '#ffffff', fontStyle: 'bold' })
+      .setOrigin(0.5)
+      .setScrollFactor(0);
+
+    const interactBtn = this.add.rectangle(aimX + 65, buttonY, buttonWidth, buttonHeight, 0x006600, 0.7).setScrollFactor(0);
+    interactBtn.setStrokeStyle(2, 0xffffff, 0.4);
+    interactBtn.setInteractive({ useHandCursor: false });
+    const interactText = this.add
+      .text(aimX + 65, buttonY, 'USE', { fontSize: '16px', color: '#ffffff', fontStyle: 'bold' })
+      .setOrigin(0.5)
+      .setScrollFactor(0);
+
+    swapBtn.on('pointerdown', () => {
+      const active = this.getActiveGameScene() as any;
+      const player = active?.getPlayer?.();
+      player?.toggleWeapon?.();
+    });
+
+    interactBtn.on('pointerdown', () => {
+      const active = this.getActiveGameScene() as any;
+      active?.interact?.();
+    });
+
+    this.touchControlsContainer.add([
+      this.moveJoyBase,
+      this.moveJoyThumb,
+      this.aimJoyBase,
+      this.aimJoyThumb,
+      swapBtn,
+      swapText,
+      interactBtn,
+      interactText,
+    ]);
+
+    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => this.onTouchPointerDown(pointer));
+    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => this.onTouchPointerMove(pointer));
+    this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => this.onTouchPointerUp(pointer));
+    this.input.on('pointerupoutside', (pointer: Phaser.Input.Pointer) => this.onTouchPointerUp(pointer));
+  }
+
+  private onTouchPointerDown(pointer: Phaser.Input.Pointer): void {
+    if (!this.touchControlsEnabled || !this.moveJoyBase || !this.aimJoyBase) return;
+
+    const mx = this.moveJoyBase.x;
+    const my = this.moveJoyBase.y;
+    const ax = this.aimJoyBase.x;
+    const ay = this.aimJoyBase.y;
+    const moveDist = Phaser.Math.Distance.Between(pointer.x, pointer.y, mx, my);
+    const aimDist = Phaser.Math.Distance.Between(pointer.x, pointer.y, ax, ay);
+
+    if (moveDist <= this.moveJoyBase.radius * 1.25 && this.moveJoyPointerId === null) {
+      this.moveJoyPointerId = pointer.id;
+      this.updateMoveStick(pointer.x, pointer.y);
+      return;
+    }
+
+    if (aimDist <= this.aimJoyBase.radius * 1.25 && this.aimJoyPointerId === null) {
+      this.aimJoyPointerId = pointer.id;
+      this.aimIsActive = true;
+      this.updateAimStick(pointer.x, pointer.y);
+    }
+  }
+
+  private onTouchPointerMove(pointer: Phaser.Input.Pointer): void {
+    if (!this.touchControlsEnabled) return;
+    if (this.moveJoyPointerId === pointer.id) {
+      this.updateMoveStick(pointer.x, pointer.y);
+    } else if (this.aimJoyPointerId === pointer.id) {
+      this.updateAimStick(pointer.x, pointer.y);
+    }
+  }
+
+  private onTouchPointerUp(pointer: Phaser.Input.Pointer): void {
+    if (!this.touchControlsEnabled) return;
+    if (this.moveJoyPointerId === pointer.id) {
+      this.moveJoyPointerId = null;
+      this.moveVector.set(0, 0);
+      if (this.moveJoyThumb && this.moveJoyBase) {
+        this.moveJoyThumb.setPosition(this.moveJoyBase.x, this.moveJoyBase.y);
+      }
+    }
+    if (this.aimJoyPointerId === pointer.id) {
+      this.aimJoyPointerId = null;
+      this.aimIsActive = false;
+      if (this.aimJoyThumb && this.aimJoyBase) {
+        this.aimJoyThumb.setPosition(this.aimJoyBase.x, this.aimJoyBase.y);
+      }
+    }
+  }
+
+  private updateMoveStick(screenX: number, screenY: number): void {
+    if (!this.moveJoyBase || !this.moveJoyThumb) return;
+    const dx = screenX - this.moveJoyBase.x;
+    const dy = screenY - this.moveJoyBase.y;
+    const max = this.moveJoyBase.radius;
+    const clamped = new Phaser.Math.Vector2(dx, dy);
+    if (clamped.length() > max) clamped.normalize().scale(max);
+
+    this.moveJoyThumb.setPosition(this.moveJoyBase.x + clamped.x, this.moveJoyBase.y + clamped.y);
+    this.moveVector.set(clamped.x / max, clamped.y / max);
+  }
+
+  private updateAimStick(screenX: number, screenY: number): void {
+    if (!this.aimJoyBase || !this.aimJoyThumb) return;
+    const dx = screenX - this.aimJoyBase.x;
+    const dy = screenY - this.aimJoyBase.y;
+    const max = this.aimJoyBase.radius;
+    const clamped = new Phaser.Math.Vector2(dx, dy);
+    if (clamped.length() > max) clamped.normalize().scale(max);
+
+    this.aimJoyThumb.setPosition(this.aimJoyBase.x + clamped.x, this.aimJoyBase.y + clamped.y);
+
+    // Keep last aim direction even if movements are tiny.
+    if (clamped.length() > 6) {
+      this.aimVector.copy(clamped.normalize());
+    }
+  }
+
+  update(): void {
+    if (!this.touchControlsEnabled) return;
+    const active = this.getActiveGameScene() as any;
+    const player = active?.getPlayer?.();
+    if (!player) return;
+
+    player.enableMobileControls(true);
+    player.setMobileMoveVector(this.moveVector);
+
+    // Aim point: convert aim direction into a screen point away from player center.
+    const cam = active.cameras?.main as Phaser.Cameras.Scene2D.Camera | undefined;
+    if (!cam) return;
+    const playerScreenX = (player.x - cam.worldView.x) * cam.zoom;
+    const playerScreenY = (player.y - cam.worldView.y) * cam.zoom;
+    const aimDistance = 120;
+    const aimScreenX = playerScreenX + this.aimVector.x * aimDistance;
+    const aimScreenY = playerScreenY + this.aimVector.y * aimDistance;
+
+    player.setMobileAimScreenPoint(aimScreenX, aimScreenY);
+    player.setMobileAttackDown(this.aimIsActive);
   }
 
   private createGameOverScreen(): void {

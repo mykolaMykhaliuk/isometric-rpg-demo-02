@@ -611,6 +611,14 @@ export class CityScene extends Phaser.Scene {
     uiScene.events.on('scoreUpdated', this.scoreUpdatedHandler);
   }
 
+  getPlayer(): Player {
+    return this.player;
+  }
+
+  interact(): void {
+    this.tryEnterBuilding();
+  }
+
   shutdown(): void {
     // Clean up event handlers to prevent duplication on scene restart
     if (this.enemyKilledHandler) {

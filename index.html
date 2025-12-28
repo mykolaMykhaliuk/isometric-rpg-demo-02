@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Isometric RPG Shooter</title>
   <style>
     * {
@@ -17,11 +17,16 @@
       align-items: center;
       min-height: 100vh;
       overflow: hidden;
+      touch-action: none;
     }
     #game-container {
       border: 2px solid #16213e;
       border-radius: 8px;
       box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+      touch-action: none;
+    }
+    canvas {
+      touch-action: none;
     }
   </style>
 </head>

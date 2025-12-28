@@ -19,6 +19,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private lastAutoSwitch: number = 0;
   private autoSwitchCooldown: number = 1000;
   public lastDirection: Phaser.Math.Vector2 = new Phaser.Math.Vector2(1, 0);
+  private mobileControlsEnabled: boolean = false;
+  private mobileMoveVector: Phaser.Math.Vector2 = new Phaser.Math.Vector2(0, 0);
+  private mobileAimScreenPoint: Phaser.Math.Vector2 | null = null;
+  private mobileAttackDown: boolean = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, 'player_right');
@@ -81,16 +85,20 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private handleMovement(): void {
     const velocity = new Phaser.Math.Vector2(0, 0);
 
-    if (this.cursors.left.isDown || this.wasd.A.isDown) {
-      velocity.x = -1;
-    } else if (this.cursors.right.isDown || this.wasd.D.isDown) {
-      velocity.x = 1;
-    }
+    if (this.mobileControlsEnabled && this.mobileMoveVector.lengthSq() > 0.0001) {
+      velocity.copy(this.mobileMoveVector);
+    } else {
+      if (this.cursors.left.isDown || this.wasd.A.isDown) {
+        velocity.x = -1;
+      } else if (this.cursors.right.isDown || this.wasd.D.isDown) {
+        velocity.x = 1;
+      }
 
-    if (this.cursors.up.isDown || this.wasd.W.isDown) {
-      velocity.y = -1;
-    } else if (this.cursors.down.isDown || this.wasd.S.isDown) {
-      velocity.y = 1;
+      if (this.cursors.up.isDown || this.wasd.W.isDown) {
+        velocity.y = -1;
+      } else if (this.cursors.down.isDown || this.wasd.S.isDown) {
+        velocity.y = 1;
+      }
     }
 
     velocity.normalize().scale(this.speed);
@@ -172,6 +180,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       }
     }
 
+    if (this.mobileControlsEnabled) {
+      if (this.mobileAttackDown && this.mobileAimScreenPoint && this.currentWeapon.canAttack(time)) {
+        // Weapons only use pointer.x/y to compute a world aim point, so a lightweight
+        // object with {x,y} is sufficient here.
+        const pseudoPointer = { x: this.mobileAimScreenPoint.x, y: this.mobileAimScreenPoint.y } as Phaser.Input.Pointer;
+        this.currentWeapon.attack(time, pseudoPointer, this);
+      }
+      return;
+    }
+
     if (pointer.isDown && this.currentWeapon.canAttack(time)) {
       this.currentWeapon.attack(time, pointer, this);
     }
@@ -217,6 +235,36 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   private updateDepth(): void {
     this.setDepth(this.y + 10);
+  }
+
+  enableMobileControls(enabled: boolean): void {
+    this.mobileControlsEnabled = enabled;
+    if (!enabled) {
+      this.mobileMoveVector.set(0, 0);
+      this.mobileAimScreenPoint = null;
+      this.mobileAttackDown = false;
+    }
+  }
+
+  setMobileMoveVector(vector: Phaser.Math.Vector2): void {
+    this.mobileMoveVector.copy(vector);
+  }
+
+  setMobileAimScreenPoint(x: number, y: number): void {
+    if (!this.mobileAimScreenPoint) {
+      this.mobileAimScreenPoint = new Phaser.Math.Vector2(x, y);
+    } else {
+      this.mobileAimScreenPoint.set(x, y);
+    }
+  }
+
+  setMobileAttackDown(isDown: boolean): void {
+    this.mobileAttackDown = isDown;
+  }
+
+  toggleWeapon(): void {
+    const next = this.currentWeapon.getWeaponType() === WeaponType.GUN ? WeaponType.SWORD : WeaponType.GUN;
+    this.switchWeapon(next);
   }
 
   getBullets(): Phaser.Physics.Arcade.Group | undefined {
