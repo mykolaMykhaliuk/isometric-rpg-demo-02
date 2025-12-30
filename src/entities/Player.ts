@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { WeaponManager } from '../managers/WeaponManager';
 import { IWeapon, WeaponType } from '../weapons/IWeapon';
 import { ArmorType } from './Armor';
+import { MobileControls } from '../ui/MobileControls';
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
   private cursors: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -19,6 +20,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private lastAutoSwitch: number = 0;
   private autoSwitchCooldown: number = 1000;
   public lastDirection: Phaser.Math.Vector2 = new Phaser.Math.Vector2(1, 0);
+  private mobileControls: MobileControls | null = null;
+  private isMobile: boolean = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, 'player_right');
@@ -52,6 +55,28 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     // Setup weapon switching
     this.setupWeaponSwitching();
+
+    // Setup mobile controls if available
+    this.setupMobileControls();
+  }
+
+  private setupMobileControls(): void {
+    this.isMobile = this.scene.sys.game.device.input.touch;
+
+    if (this.isMobile) {
+      // Get mobile controls from UIScene
+      const uiScene = this.scene.scene.get('UIScene') as any;
+      if (uiScene && uiScene.getMobileControls) {
+        this.mobileControls = uiScene.getMobileControls();
+      }
+
+      // Listen for weapon switch from mobile controls
+      if (uiScene) {
+        uiScene.events.on('mobileWeaponSwitch', () => {
+          this.cycleWeaponNext();
+        });
+      }
+    }
   }
 
   private setupWeaponSwitching(): void {
@@ -81,16 +106,26 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private handleMovement(): void {
     const velocity = new Phaser.Math.Vector2(0, 0);
 
-    if (this.cursors.left.isDown || this.wasd.A.isDown) {
-      velocity.x = -1;
-    } else if (this.cursors.right.isDown || this.wasd.D.isDown) {
-      velocity.x = 1;
-    }
+    // Check mobile joystick first
+    if (this.mobileControls && this.mobileControls.isActive()) {
+      const joystickDir = this.mobileControls.getJoystickDirection();
+      if (joystickDir.length() > 0.1) {
+        velocity.x = joystickDir.x;
+        velocity.y = joystickDir.y;
+      }
+    } else {
+      // Keyboard input for desktop
+      if (this.cursors.left.isDown || this.wasd.A.isDown) {
+        velocity.x = -1;
+      } else if (this.cursors.right.isDown || this.wasd.D.isDown) {
+        velocity.x = 1;
+      }
 
-    if (this.cursors.up.isDown || this.wasd.W.isDown) {
-      velocity.y = -1;
-    } else if (this.cursors.down.isDown || this.wasd.S.isDown) {
-      velocity.y = 1;
+      if (this.cursors.up.isDown || this.wasd.W.isDown) {
+        velocity.y = -1;
+      } else if (this.cursors.down.isDown || this.wasd.S.isDown) {
+        velocity.y = 1;
+      }
     }
 
     velocity.normalize().scale(this.speed);
@@ -157,8 +192,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   private handleAttack(time: number): void {
-    const pointer = this.scene.input.activePointer;
-
     // Auto-switch to sword if gun has no ammo
     if (
       this.currentWeapon.getWeaponType() === WeaponType.GUN &&
@@ -172,8 +205,27 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       }
     }
 
-    if (pointer.isDown && this.currentWeapon.canAttack(time)) {
-      this.currentWeapon.attack(time, pointer, this);
+    // Check if we should attack
+    let shouldAttack = false;
+    let attackPointer: Phaser.Input.Pointer | null = null;
+
+    // Check mobile shooting first
+    if (this.mobileControls && this.mobileControls.isActive()) {
+      if (this.mobileControls.isShooting()) {
+        shouldAttack = true;
+        attackPointer = this.mobileControls.getShootingPointer();
+      }
+    } else {
+      // Desktop mouse input
+      const pointer = this.scene.input.activePointer;
+      if (pointer.isDown) {
+        shouldAttack = true;
+        attackPointer = pointer;
+      }
+    }
+
+    if (shouldAttack && attackPointer && this.currentWeapon.canAttack(time)) {
+      this.currentWeapon.attack(time, attackPointer, this);
     }
   }
 

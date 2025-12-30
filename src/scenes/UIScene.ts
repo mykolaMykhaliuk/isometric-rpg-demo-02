@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { WeaponType } from '../weapons/IWeapon';
+import { MobileControls } from '../ui/MobileControls';
 
 export class UIScene extends Phaser.Scene {
   private healthBar!: Phaser.GameObjects.Graphics;
@@ -12,6 +13,7 @@ export class UIScene extends Phaser.Scene {
   private weaponText!: Phaser.GameObjects.Text;
   private score: number = 0;
   private gameOverContainer!: Phaser.GameObjects.Container;
+  private mobileControls!: MobileControls;
 
   constructor() {
     super({ key: 'UIScene' });
@@ -25,6 +27,7 @@ export class UIScene extends Phaser.Scene {
     this.createScoreDisplay();
     this.createControls();
     this.createGameOverScreen();
+    this.createMobileControls();
     this.setupEvents();
   }
 
@@ -284,6 +287,11 @@ export class UIScene extends Phaser.Scene {
   }
 
   private createControls(): void {
+    // Only show desktop controls if not a touch device
+    if (this.sys.game.device.input.touch) {
+      return;
+    }
+
     const x = 20;
     const y = this.cameras.main.height - 100;
 
@@ -299,6 +307,24 @@ export class UIScene extends Phaser.Scene {
       color: '#888888',
       lineSpacing: 4,
     });
+  }
+
+  private createMobileControls(): void {
+    this.mobileControls = new MobileControls(this);
+
+    // Setup E button callback to emit event for game scenes
+    this.mobileControls.setOnEButtonPress(() => {
+      this.events.emit('mobileEButtonPressed');
+    });
+
+    // Setup weapon switch callback
+    this.mobileControls.setOnWeaponSwitch(() => {
+      this.events.emit('mobileWeaponSwitch');
+    });
+  }
+
+  getMobileControls(): MobileControls {
+    return this.mobileControls;
   }
 
   private createGameOverScreen(): void {
@@ -346,10 +372,17 @@ export class UIScene extends Phaser.Scene {
     const finalScoreText = this.gameOverContainer.list[3] as Phaser.GameObjects.Text;
     finalScoreText.setText(this.score.toString());
 
+    // Update restart text based on device
+    const restartText = this.gameOverContainer.list[4] as Phaser.GameObjects.Text;
+    if (this.sys.game.device.input.touch) {
+      restartText.setText('Tap to Restart');
+    } else {
+      restartText.setText('Press R to Restart');
+    }
+
     this.gameOverContainer.setVisible(true);
 
-    // Setup restart key
-    this.input.keyboard!.once('keydown-R', () => {
+    const doRestart = () => {
       this.score = 0;
       this.scoreText.setText('0');
       this.gameOverContainer.setVisible(false);
@@ -360,7 +393,15 @@ export class UIScene extends Phaser.Scene {
       this.scene.stop('CityScene');
       this.scene.stop('BuildingScene');
       this.scene.start('CityScene');
-    });
+    };
+
+    // Setup restart key for desktop
+    this.input.keyboard!.once('keydown-R', doRestart);
+
+    // Setup touch restart for mobile
+    if (this.sys.game.device.input.touch) {
+      this.input.once('pointerdown', doRestart);
+    }
   }
 
   private setupEvents(): void {

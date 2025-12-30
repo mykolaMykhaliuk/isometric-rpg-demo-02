@@ -45,6 +45,7 @@ export class BuildingScene extends Phaser.Scene {
   private enemyKilledHandler?: (points: number) => void;
   private playerDiedHandler?: () => void;
   private scoreUpdatedHandler?: (newScore: number) => void;
+  private mobileEButtonHandler?: () => void;
 
   // Interior map: 0 = floor, 1 = wall, 2 = exit door
   private interiorMaps: number[][][] = [
@@ -719,6 +720,11 @@ export class BuildingScene extends Phaser.Scene {
     const keyE = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
     keyE.on('down', () => this.tryExitBuilding());
 
+    // Mobile E button
+    const uiScene = this.scene.get('UIScene');
+    this.mobileEButtonHandler = () => this.tryExitBuilding();
+    uiScene.events.on('mobileEButtonPressed', this.mobileEButtonHandler);
+
     // Enemy killed event - remove existing listener first to prevent duplicates
     if (this.enemyKilledHandler) {
       this.events.off('enemyKilled', this.enemyKilledHandler);
@@ -899,6 +905,15 @@ export class BuildingScene extends Phaser.Scene {
         uiScene.events.off('scoreUpdated', this.scoreUpdatedHandler);
       }
       this.scoreUpdatedHandler = undefined;
+    }
+
+    // Clean up mobile E button handler
+    if (this.mobileEButtonHandler) {
+      const uiScene = this.scene.get('UIScene');
+      if (uiScene && uiScene.events) {
+        uiScene.events.off('mobileEButtonPressed', this.mobileEButtonHandler);
+      }
+      this.mobileEButtonHandler = undefined;
     }
   }
 }

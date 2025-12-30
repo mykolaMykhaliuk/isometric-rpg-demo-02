@@ -56,6 +56,7 @@ export class CityScene extends Phaser.Scene {
   private enemyKilledHandler?: (points: number) => void;
   private playerDiedHandler?: () => void;
   private scoreUpdatedHandler?: (newScore: number) => void;
+  private mobileEButtonHandler?: () => void;
 
   // Building labels for the four central buildings
   private buildingLabels: BuildingLabel[] = [
@@ -588,23 +589,27 @@ export class CityScene extends Phaser.Scene {
     const keyE = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
     keyE.on('down', () => this.tryEnterBuilding());
 
+    // Get UIScene reference (used multiple times below)
+    const uiScene = this.scene.get('UIScene');
+
+    // Mobile E button
+    this.mobileEButtonHandler = () => this.tryEnterBuilding();
+    uiScene.events.on('mobileEButtonPressed', this.mobileEButtonHandler);
+
     // Enemy killed event - store handler for cleanup
     this.enemyKilledHandler = (points: number) => {
-      const uiScene = this.scene.get('UIScene');
-      uiScene.events.emit('addScore', points);
+      this.scene.get('UIScene').events.emit('addScore', points);
     };
     this.events.on('enemyKilled', this.enemyKilledHandler);
 
     // Player died event - store handler for cleanup
     this.playerDiedHandler = () => {
       this.scene.pause();
-      const uiScene = this.scene.get('UIScene');
-      uiScene.events.emit('showGameOver');
+      this.scene.get('UIScene').events.emit('showGameOver');
     };
     this.events.on('playerDied', this.playerDiedHandler);
 
     // Listen for score updates from UIScene - store handler for cleanup
-    const uiScene = this.scene.get('UIScene');
     this.scoreUpdatedHandler = (newScore: number) => {
       this.updateDifficultyBasedOnScore(newScore);
     };
@@ -627,6 +632,12 @@ export class CityScene extends Phaser.Scene {
       const uiScene = this.scene.get('UIScene');
       uiScene.events.off('scoreUpdated', this.scoreUpdatedHandler);
       this.scoreUpdatedHandler = undefined;
+    }
+
+    if (this.mobileEButtonHandler) {
+      const uiScene = this.scene.get('UIScene');
+      uiScene.events.off('mobileEButtonPressed', this.mobileEButtonHandler);
+      this.mobileEButtonHandler = undefined;
     }
   }
 
